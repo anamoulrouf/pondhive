@@ -4444,7 +4444,7 @@ requestAnimationFrame(draw);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   };
-  PH.stepMode = function (on) { stepping = !!on; fakeNow = 0; lastMs = 0; accumulator = 0; };
+  PH.stepMode = function (on) { stepping = PH.stepping = !!on; fakeNow = 0; lastMs = 0; accumulator = 0; };
   PH.aim = function (p) { aimOverride = p ? [p[0], p[1]] : null; };
   function frame(render) {
     var raf = window.requestAnimationFrame;
@@ -4526,6 +4526,18 @@ requestAnimationFrame(draw);
     pendingSpawns.length = 0; deactivateAllEnemies();
     waveIndex = ARENAS[4].waves.length - 1; wavesScheduled = true;
     startBossEntrance();
+  };
+  // GPU-synced render cost: render n frames, forcing completion with a 1-pixel readback each time.
+  PH.bench = function (n) {
+    var px = new Uint8Array(4), t = [];
+    for (var i = 0; i < n; i++) {
+      var t0 = performance.now(); PH.step(1, { script: true, render: true });
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); t.push(performance.now() - t0);
+    }
+    t.sort(function (a, b) { return a - b; });
+    return { p50: t[t.length >> 1], p90: t[Math.floor(t.length * 0.9)],
+      draws: typeof gfx !== 'undefined' ? gfx.draws : null, tris: typeof gfx !== 'undefined' ? Math.round(gfx.tris) : null,
+      tier: typeof gfx !== 'undefined' ? gfx.tier : 'n/a' };
   };
   PH.info = function () { return { items: items.length, w: canvas.width, h: canvas.height, state: gameState }; };
 })();

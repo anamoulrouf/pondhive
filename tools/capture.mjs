@@ -122,22 +122,20 @@ async function shots() {
 
 // ---------------------------------------------------------------- perf (real-time frames)
 async function perf() {
-  const file = opt('file', 'pondhive.html');
+  const file = opt('file', 'pondhive.html'), tier = opt('tier', null);
+  const vw = +opt('w', 2560), vh = +opt('h', 1440);
   const browser = await launch();
-  const { page, errors } = await openGame(browser, file, '&perf');
-  const res = await page.evaluate(async () => {
-    const ph = window.__ph;
-    ph.seed(3); ph.gotoBoss(); ph.stepMode(true); ph.step(240, { script: true }); ph.stepMode(false);
-    const times = [];
-    await new Promise((done) => {
-      let last = performance.now(), n = 0;
-      function f(t) { times.push(t - last); last = t; if (++n < 240) requestAnimationFrame(f); else done(); }
-      requestAnimationFrame(f);
-    });
-    times.sort((a, b) => a - b);
-    return { p50: times[times.length >> 1], p90: times[Math.floor(times.length * 0.9)], info: ph.info() };
+  const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
+  const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('file://' + path.join(ROOT, file) + '?debug' + (tier ? '&tier=' + tier : ''));
+  await page.waitForFunction(() => window.__ph && window.__ph.version >= 1);
+  const t0 = Date.now();
+  const res = await page.evaluate(() => {
+    const ph = window.__ph; ph.stepMode(true); ph.seed(3); ph.gotoBoss(); ph.stepCount = 0;
+    ph.step(600, { script: true });
+    return ph.bench(120);
   });
-  console.log(`perf ${file}: p50=${res.p50.toFixed(2)}ms p90=${res.p90.toFixed(2)}ms`, JSON.stringify(res.info));
+  console.log(`perf ${file} ${vw}x${vh} tier=${res.tier}: render p50=${res.p50.toFixed(2)}ms p90=${res.p90.toFixed(2)}ms draws=${res.draws} tris=${res.tris}`);
   if (errors.length) console.log('ERRORS:\n  ' + errors.join('\n  '));
   await browser.close();
   return 0;
