@@ -4539,6 +4539,7 @@ requestAnimationFrame(draw);
       draws: typeof gfx !== 'undefined' ? gfx.draws : null, tris: typeof gfx !== 'undefined' ? Math.round(gfx.tris) : null,
       tier: typeof gfx !== 'undefined' ? gfx.tier : 'n/a' };
   };
+  PH.cam = function (eye, at) { window.__phCam = eye ? [eye, at || [0, 0, 0]] : null; };
   PH.info = function () { return { items: items.length, w: canvas.width, h: canvas.height, state: gameState }; };
 })();
 </script>

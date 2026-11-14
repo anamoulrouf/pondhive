@@ -560,7 +560,16 @@ var mainProg = program(
   ' } else if(uUnlit>0.5){\n' +
   '  col=alb;\n' +
   ' } else {\n' +
-  '  if(uMat<0.5||uMat>3.5){ alb*=0.965+vnoise(vLocal*9.0)*0.07; }\n' +
+  '  if(uMat<0.5){ float cn=vnoise(vLocal*7.0)*0.6+vnoise(vLocal*19.0)*0.4; alb*=0.94+cn*0.12;\n' +
+  '   n=normalize(n+(vec3(vnoise(vLocal*11.0),vnoise(vLocal*11.0+7.1),vnoise(vLocal*11.0+3.7))-0.5)*0.16); }\n' +
+  '  else if(uMat>3.5&&uMat<4.5){ alb*=0.95+vnoise(vLocal*8.0)*0.1; }\n' +
+  '  if(uMat>4.5){ float pr=length(vWorld.xz); float pa=atan(vWorld.z,vWorld.x);\n' +
+  '   float k1=18.0/6.2832; float d1=abs(fract(pa*k1)-0.5)/k1*pr; float k2=54.0/6.2832; float d2=abs(fract(pa*k2+0.25)-0.5)/k2*pr;\n' +
+  '   float inside=1.0-smoothstep(uPadR-1.0,uPadR-0.55,pr);\n' +
+  '   float vein=(1.0-smoothstep(0.025,0.075,d1))*smoothstep(0.5,1.6,pr)*inside + (1.0-smoothstep(0.012,0.04,d2))*smoothstep(3.5,5.5,pr)*inside*0.6;\n' +
+  '   alb=mix(alb, alb*1.18+vec3(0.035,0.045,0.0), clamp(vein,0.0,1.0)*0.85);\n' +
+  '   alb*=0.95+0.1*(1.0-smoothstep(0.0,uPadR,pr)) + (vnoise(vWorld*1.3)-0.5)*0.05;\n' +
+  '   float edge=smoothstep(uPadR-0.62,uPadR-0.52,pr)*(1.0-smoothstep(uPadR-0.44,uPadR-0.34,pr)); alb=mix(alb, vec3(0.9,0.93,0.74), edge*0.5); }\n' +
   '  if(uAO>0.5) alb*=mix(0.6,1.0,smoothstep(uGroundY,uGroundY+0.55,vWorld.y));\n' +
   '  float ndl=dot(n,L); float wrap=clamp((ndl+0.45)/1.45,0.0,1.0);\n' +
   '  vec3 hemi=mix(uGndCol,uSkyCol,n.y*0.5+0.5);\n' +
@@ -688,6 +697,37 @@ function meshBind(m) {
 }
 // Shared mesh cache: build once, reuse for every instance of a model.
 var MESH = { cache: {}, get: function (key, build) { return this.cache[key] || (this.cache[key] = build()); } };
+
+// Cosmetic randomness only (never Math.random, so gameplay stays deterministic for parity).
+var _vfxSeed = 99991;
+function vfxRand() { _vfxSeed = (_vfxSeed * 16807) % 2147483647; return (_vfxSeed - 1) / 2147483646; }
+function vfxRange(a, b) { return a + vfxRand() * (b - a); }
+function ortho(l, r, b, t, n, f) {
+  return [2/(r-l),0,0,0, 0,2/(t-b),0,0, 0,0,-2/(f-n),0, -(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1];
+}
+function hexv(h) { return [((h>>16)&255)/255, ((h>>8)&255)/255, (h&255)/255]; }
+// Lighting looks: one per arena (see docs/STYLE.md), plus menu and ending.
+var LOOKS = {
+  meadow:  { sunDir: [0.5, 0.8, 0.45], sun: 0xfff0d2, sunK: 0.74, sky: 0xb4d9ec, skyK: 0.4, gnd: 0x8fae6c, gndK: 0.24,
+             fog: 0xd3e9e6, fogNear: 30, fogFar: 62, shallow: 0x9ad8e2, deep: 0x5aaecb,
+             gain: [0.98, 0.97, 0.94], lift: [0.02, 0.018, 0.01], sat: 1.04, bloom: 0.1, vignette: 0.6, emi: 0.35 },
+  noon:    { sunDir: [0.30, 0.92, 0.25], sun: 0xffffff, sunK: 0.80, sky: 0xc6e8f6, skyK: 0.41, gnd: 0xa2c47e, gndK: 0.25,
+             fog: 0xd6eef2, fogNear: 30, fogFar: 62, shallow: 0xa4e6f0, deep: 0x4aaed2,
+             gain: [0.98, 0.98, 0.97], lift: [0.01, 0.01, 0.01], sat: 1.11, bloom: 0.10, vignette: 0.5, emi: 0.3 },
+  golden:  { sunDir: [0.75, 0.55, 0.35], sun: 0xffd9a0, sunK: 0.80, sky: 0xc8dfe6, skyK: 0.36, gnd: 0xb0b878, gndK: 0.25,
+             fog: 0xead8bc, fogNear: 28, fogFar: 60, shallow: 0xa6dcd6, deep: 0x4f9fb8,
+             gain: [1.02, 0.96, 0.87], lift: [0.03, 0.015, 0.0], sat: 1.14, bloom: 0.16, vignette: 0.6, emi: 0.45 },
+  sunset:  { sunDir: [0.85, 0.38, 0.22], sun: 0xffb995, sunK: 0.76, sky: 0xd9c4dc, skyK: 0.38, gnd: 0xb59a8c, gndK: 0.25,
+             fog: 0xf0c9c6, fogNear: 26, fogFar: 58, shallow: 0xb3d6dc, deep: 0x5b8fb5,
+             gain: [1.02, 0.93, 0.93], lift: [0.04, 0.012, 0.03], sat: 1.11, bloom: 0.19, vignette: 0.65, emi: 0.6 },
+  dusk:    { sunDir: [-0.4, 0.6, 0.45], sun: 0xbfc8e6, sunK: 0.56, sky: 0x8ea6c4, skyK: 0.40, gnd: 0x6f7f74, gndK: 0.27,
+             fog: 0x8796ad, fogNear: 24, fogFar: 55, shallow: 0x7fb4c6, deep: 0x335f80,
+             gain: [0.93, 0.95, 1.01], lift: [0.0, 0.01, 0.03], sat: 1.01, bloom: 0.24, vignette: 0.75, emi: 1.0 }
+};
+var ARENA_LOOK = ['meadow', 'noon', 'golden', 'sunset', 'dusk'];
+var look = null;
+function setLook(name) { look = LOOKS[name] || LOOKS.meadow; look.name = name; }
+setLook('meadow');
 function hex(h, a) { return [((h>>16)&255)/255, ((h>>8)&255)/255, (h&255)/255, a===undefined?1:a]; }
 function shade(c,f){ return [c[0]*f,c[1]*f,c[2]*f,c[3]]; }
 function sphereTris(r, w, h) {
@@ -735,6 +775,91 @@ var _seed = 1877;
 function srand() { _seed = (_seed * 16807) % 2147483647; return (_seed - 1) / 2147483646; }
 function srr(a, b) { return a + srand() * (b - a); }
 
+// ---------- clay shape kit: parametric blobs, lathes, tubes, arcs (all return triangle lists) ----------
+var SPHERE_HI = sphereTris(1, 30, 20), SPHERE_MID = sphereTris(1, 18, 12), SPHERE_LO = sphereTris(1, 9, 6);
+// Grid surface over u in [0,1] (around) x v in [0,1] (bottom to top). fn(u, v) -> [x, y, z].
+function gridTris(nu, nv, fn) {
+  var t = [], P = [];
+  for (var j = 0; j <= nv; j++) { P[j] = []; for (var i = 0; i <= nu; i++) P[j][i] = fn(i / nu, j / nv); }
+  for (var jj = 0; jj < nv; jj++) for (var ii = 0; ii < nu; ii++) {
+    var a = P[jj][ii], b = P[jj][ii+1], c = P[jj+1][ii+1], d = P[jj+1][ii];
+    t.push([a, c, b], [a, d, c]);
+  }
+  return t;
+}
+// Blob: unit sphere pushed through deform(x, y, z) -> [x, y, z]; y runs -1 (bottom) .. 1 (top).
+function blobTris(nu, nv, deform) {
+  return gridTris(nu, nv, function (u, v) {
+    var th = u * 6.2832, ph = Math.PI * (1 - v);
+    var x = Math.sin(ph) * Math.cos(th), y = Math.cos(ph), z = Math.sin(ph) * Math.sin(th);
+    return deform ? deform(x, y, z) : [x, y, z];
+  });
+}
+// Lathe: profile [[radius, y], ...] from bottom to top, revolved around Y.
+function latheTris(profile, seg) {
+  var n = profile.length - 1;
+  return gridTris(seg, n, function (u, v) {
+    var k = Math.round(v * n), p = profile[k], a = u * 6.2832;
+    return [Math.cos(a) * p[0], p[1], Math.sin(a) * p[0]];
+  });
+}
+// Tube along a polyline path with radius rf(t) (t 0..1), rounded closed ends.
+function tubeTris(path, rf, seg) {
+  var n = path.length - 1, t = [];
+  function frameAt(k) {
+    var a = path[Math.max(0, k - 1)], b = path[Math.min(n, k + 1)];
+    var T = norm(sub(b, a)), up = Math.abs(T[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+    var N = norm(cross(up, T)), B = cross(T, N);
+    return [T, N, B];
+  }
+  var rings = [];
+  for (var k = 0; k <= n; k++) {
+    var F = frameAt(k), r = rf(k / n), ring = [];
+    for (var i = 0; i <= seg; i++) {
+      var a = i / seg * 6.2832, ca = Math.cos(a) * r, sa = Math.sin(a) * r;
+      ring.push([path[k][0] + F[1][0]*ca + F[2][0]*sa, path[k][1] + F[1][1]*ca + F[2][1]*sa, path[k][2] + F[1][2]*ca + F[2][2]*sa]);
+    }
+    rings.push(ring);
+  }
+  for (var kk = 0; kk < n; kk++) for (var ii = 0; ii < seg; ii++) {
+    var p1 = rings[kk][ii], p2 = rings[kk][ii+1], p3 = rings[kk+1][ii+1], p4 = rings[kk+1][ii];
+    t.push([p1, p3, p2], [p1, p4, p3]);
+  }
+  // Caps.
+  [[0, path[0]], [n, path[n]]].forEach(function (cap) {
+    var ring = rings[cap[0]], c = cap[1];
+    for (var i = 0; i < seg; i++) t.push(cap[0] === 0 ? [c, ring[i], ring[i+1]] : [c, ring[i+1], ring[i]]);
+  });
+  return t;
+}
+// Torus arc in the XY plane (facing +Z), angles in radians; used for mouths, brows, handles.
+function torusArcTris(R, r, a0, a1, segT, segR) {
+  return gridTris(segT, segR, function (u, v) {
+    var a = a0 + (a1 - a0) * u, b = v * 6.2832;
+    return [(R + r * Math.cos(b)) * Math.cos(a), (R + r * Math.cos(b)) * Math.sin(a), r * Math.sin(b)];
+  });
+}
+function mixc(a, b, t) { t = Math.max(0, Math.min(1, t)); return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t, 1]; }
+function sstep(e0, e1, x) { var t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }
+// Build one mesh from several [tris, matrix, colour|paint, emi] pieces (bone merging).
+function mergeMesh(pieces, smoothDeg) {
+  var b = new Builder();
+  for (var i = 0; i < pieces.length; i++) b.add(pieces[i][0], pieces[i][1] || compose(0,0,0,0,0,0,1,1,1), pieces[i][2], pieces[i][3]);
+  return b.upload(smoothDeg);
+}
+function M(px, py, pz, rx, ry, rz, sx, sy, sz) {
+  return compose(px || 0, py || 0, pz || 0, rx || 0, ry || 0, rz || 0, sx === undefined ? 1 : sx, sy === undefined ? (sx === undefined ? 1 : sx) : sy, sz === undefined ? (sx === undefined ? 1 : sx) : sz);
+}
+// Item from a mesh with material options.
+function clayItem(mesh, mat, opts) {
+  opts = opts || {};
+  var it = add(mesh, mat || M(), !!opts.transparent, opts.dynamic || null, opts.local || null, opts);
+  it.material = opts.material || 0;
+  if (opts.aoGround !== undefined) it.aoGround = opts.aoGround;
+  if (opts.castShadow === false) it.castShadow = false;
+  return it;
+}
+
 // ---------- scene ----------
 var items = []; // {mesh, mat, transparent, dynamic, local, alpha, emiScale, water, unlit, additive}
 function add(mesh, mat, transparent, dynamic, local, opts) {
@@ -767,95 +892,179 @@ var waterItem = null, padItem = null, arenaBg = [0.016, 0.13, 0.18];
   waterItem = add(wb.upload(), compose(0,0,0,0,0,0,1,1,1), false, null, null, { water: 1 });
 }
 
-// Lily pad arena: larger round green disc with thickness, lighter in the middle,
-// plus a soft glowing turquoise rim so the playable edge is clear.
+// Lily pad arena: a broad clay lily pad (veins, lighter centre and a cream inner edge line are
+// painted per pixel by the 'pad' material) with a raised rolled rim that marks the playable edge.
 var PAD_R = 10, PAD_TOP = 0.42;
-var rimItem, rimGlowItem;
-{
-  var pb = new Builder(), SEG2 = 52;
-  var cMid = hex(0x55c266), cEdge = hex(0x2b8f4c), cSide = hex(0x1d6b3e);
-  function pt(r,y,a){ return [Math.cos(a)*r,y,Math.sin(a)*r]; }
-  for (var i=0;i<SEG2;i++){
-    var a1=i/SEG2*6.2832, a2=(i+1)/SEG2*6.2832, v = i%2 ? 0.95 : 1.05;
-    var vein = (i % 7 === 0) ? 1.14 : 1;
-    pb.tri([0,PAD_TOP,0], pt(PAD_R*0.5,PAD_TOP,a1), pt(PAD_R*0.5,PAD_TOP,a2), shade(cMid,v*vein));
-    pb.quad(pt(PAD_R*0.5,PAD_TOP,a1), pt(PAD_R*0.8,PAD_TOP-0.03,a1), pt(PAD_R*0.8,PAD_TOP-0.03,a2), pt(PAD_R*0.5,PAD_TOP,a2), shade(cMid,v*0.9*vein));
-    pb.quad(pt(PAD_R*0.8,PAD_TOP-0.03,a1), pt(PAD_R,PAD_TOP-0.06,a1), pt(PAD_R,PAD_TOP-0.06,a2), pt(PAD_R*0.8,PAD_TOP-0.03,a2), shade(cEdge,v));
-    pb.quad(pt(PAD_R,PAD_TOP-0.06,a1), pt(PAD_R,0.08,a1), pt(PAD_R,0.08,a2), pt(PAD_R,PAD_TOP-0.06,a2), shade(cSide,v));
-    pb.tri([0,0.08,0], pt(PAD_R,0.08,a2), pt(PAD_R,0.08,a1), cSide);
-  }
-  padItem = add(pb.upload(), compose(0,0,0,0,0,0,1,1,1));
-  var rimBuilder = new Builder();
-  rimBuilder.add(torusTris(PAD_R + 0.06, 0.07, 72, 6), compose(0,0,0,0,0,0,1,1,1), hex(0x1a4a44), [0.25, 0.95, 0.85]);
-  rimItem = add(rimBuilder.upload(), compose(0,PAD_TOP+0.01,0,0,0,0,1,1,1));
-  var glowBuilder = new Builder();
-  glowBuilder.add(torusTris(PAD_R + 0.06, 0.26, 72, 6), compose(0,0,0,0,0,0,1,1,1), hex(0x2ee6a8, 0.16));
-  rimGlowItem = add(glowBuilder.upload(), compose(0,PAD_TOP+0.01,0,0,0,0,1,1,1), true, null, null, { additive: true, unlit: 1 });
-}
+var rimItem = null, rimGlowItem = null;
+MAT.pad = 5;
+(function () {
+  var pb = new Builder(), padC = hex(0x63ab55), rimC = hex(0x58a04c), underC = hex(0x3d7a3c);
+  pb.add(gridTris(120, 30, function (u, v) {
+    var a = u * 6.2832, r = v * PAD_R * 0.962;
+    return [Math.cos(a) * r, PAD_TOP + 0.012 * (1 - v * v), Math.sin(a) * r];
+  }), M(), padC);
+  var prof = [[PAD_R * 0.962, PAD_TOP], [PAD_R * 0.978, PAD_TOP + 0.035], [PAD_R * 0.992, PAD_TOP + 0.085], [PAD_R + 0.04, PAD_TOP + 0.09],
+              [PAD_R + 0.1, PAD_TOP + 0.02], [PAD_R + 0.08, PAD_TOP - 0.12], [PAD_R - 0.05, 0.08], [PAD_R - 0.6, 0.02]];
+  pb.add(latheTris(prof, 120), M(), { paint: function (q) { return q[1] > PAD_TOP - 0.02 ? rimC : mixc(rimC, underC, sstep(PAD_TOP - 0.02, 0.1, q[1])); } });
+  padItem = clayItem(pb.upload(55), M(), { material: MAT.pad });
+})();
 
-// Outside-only dressing: rocks, reeds and glowing plants ring the arena in the water.
-// Every placement radius is greater than PAD_R, so nothing sits inside the play area.
-var swayers = []; // reed groups that sway gently {mats:[{item,local}], phase, base...}
-{
-  var stemC = hex(0x2f8f5e), tipC = hex(0x7a4a26), rockCols = [hex(0x4d6b7a), hex(0x39525f), hex(0x54788a)];
-  function outside(minGap, maxGap) {
-    var a = srand() * 6.2832, r = PAD_R + srr(minGap, maxGap);
-    return [Math.cos(a) * r, Math.sin(a) * r, r];
+// Pond diorama outside the pad: grassy sand banks, a blossom tree and a willow, mossy rocks,
+// cattails, flowers, grass tufts and floating lily pads. Static pieces are merged into a few
+// meshes (one draw each); cattails and willow strands sway. Everything sits beyond PAD_R + 0.9.
+var swayers = []; // swaying groups: { item, x, z, phase, amp }
+function shoreOK(x, z, gap) { return Math.hypot(x, z) > PAD_R + (gap || 1.2); }
+var SHORE = { banks: [
+  // [x, z, radiusX, radiusZ, height, rotY]
+  [0, -17.5, 12.5, 5.2, 1.0, 0], [-12.5, -13.5, 5.5, 4.0, 0.85, 0.5], [12.8, -13.0, 5.8, 4.2, 0.9, -0.45],
+  [-19.5, -3.5, 4.8, 5.5, 0.85, 0.2], [19.5, -2.0, 4.6, 5.0, 0.8, -0.2],
+  [-16.5, 10.5, 4.6, 3.2, 0.7, -0.3], [17.0, 10.0, 4.2, 3.0, 0.7, 0.4], [3.0, 16.5, 7.0, 3.2, 0.7, 0.1]
+] };
+// Height of the bank top at (x, z) or -1 when not on a bank (used to plant decor on the grass).
+function bankTop(x, z) {
+  var best = -1;
+  for (var i = 0; i < SHORE.banks.length; i++) {
+    var b = SHORE.banks[i], c = Math.cos(-b[5]), s = Math.sin(-b[5]);
+    var lx = (x - b[0]) * c - (z - b[1]) * s, lz = (x - b[0]) * s + (z - b[1]) * c;
+    var d = (lx / b[2]) * (lx / b[2]) + (lz / b[3]) * (lz / b[3]);
+    if (d < 0.72) { var yu = Math.sqrt(1 - d); best = Math.max(best, -0.12 + b[4] * (yu > 0.3 ? 0.3 + (yu - 0.3) * 0.55 : yu)); }
   }
-  // Rocks: chunky jittered icosahedra, some clustered.
-  for (var ri=0; ri<14; ri++){
-    var rp = outside(1.2, 7), cnt = 1 + ((srand()*3)|0);
-    for (var q=0;q<cnt;q++){
-      var rx = rp[0] + srr(-0.7,0.7), rz = rp[1] + srr(-0.7,0.7);
-      if (Math.hypot(rx, rz) < PAD_R + 0.9) continue;
-      decor(icosaTris(srr(0.5,1.4), 0.3, srand), rx, srr(-0.1,0.3), rz, rockCols[(srand()*3)|0],
-        [1, srr(0.6,0.95), 1], [srand()*3, srand()*3, srand()*3]);
-    }
-  }
-  // Reeds: tapered stems with cattail or glowing tips, in small clusters. Clusters are
-  // recorded so updateFrog can sway them by rebuilding their matrices each frame.
-  var reedGroups = [];
-  for (var ci=0; ci<14; ci++){
-    var cp = outside(1.0, 6);
-    var grp = { x: cp[0], z: cp[1], phase: srand()*6.28, parts: [] };
-    var n = 3 + ((srand()*3)|0);
-    for (var si=0; si<n; si++){
-      var h = srr(1.5, 3.2), lean = srr(-0.13, 0.13), ox = srr(-0.45,0.45), oz = srr(-0.45,0.45);
-      var stem = decor(CYL, 0,0,0, stemC, [0.06,h,0.06], [0,0,lean]);
-      stem.dynamic = 'reed';
-      grp.parts.push({ item: stem, local: compose(ox, h/2, oz, 0,0,lean, 0.06,h,0.06) });
-      var glowTip = srand() < 0.35;
-      var tip = decor(CYL, 0,0,0, glowTip ? hex(0x8ffcff) : tipC, [0.09,0.45,0.09], [0,0,lean],
-        glowTip ? [0.15,0.75,0.75] : null);
-      tip.dynamic = 'reed';
-      grp.parts.push({ item: tip, local: compose(ox - Math.sin(lean)*h*0.5, h + 0.12, oz, 0,0,lean, 0.09,0.45,0.09) });
-      var blade = decor(CONE, 0,0,0, stemC, [0.08,h*0.7,0.08], [0,0,lean*2.2]);
-      blade.dynamic = 'reed';
-      grp.parts.push({ item: blade, local: compose(ox + srr(-0.25,0.25), h*0.32, oz + srr(-0.25,0.25), 0,0,lean*2.2, 0.08,h*0.7,0.08) });
-    }
-    reedGroups.push(grp);
-  }
-  swayers = reedGroups;
-  // Glowing plants: short stems topped with turquoise (sometimes warm) glowing bulbs.
-  for (var gi=0; gi<12; gi++){
-    var gp = outside(1.0, 6.5);
-    for (var bi=0; bi<4; bi++){
-      var bh = srr(0.45, 1.05), bx = gp[0] + srr(-0.4,0.4), bz = gp[1] + srr(-0.4,0.4);
-      if (Math.hypot(bx, bz) < PAD_R + 0.8) continue;
-      decor(CYL, bx, bh/2 - 0.05, bz, hex(0x20705a), [0.06,bh,0.06], [0,0,srr(-0.2,0.2)]);
-      var gold = srand() >= 0.8;
-      decor(icosaTris(srr(0.13,0.23), 0, srand), bx, bh + 0.08, bz,
-        gold ? hex(0xffe9a0) : hex(0x9ffcff), [1,1,1], null, gold ? [0.8,0.5,0.1] : [0.12,0.85,0.65]);
-    }
-  }
-  // A few small floating pads with lotus buds out on the water.
-  for (var li=0; li<7; li++){
-    var lp = outside(2.2, 10), lr = srr(0.8, 1.7);
-    decor(CYL, lp[0], 0.04, lp[1], hex(0x2b8f4c), [lr, 0.12, lr], [0, srand()*3, 0]);
-    if (srand() < 0.6) decor(CONE, lp[0]+srr(-0.3,0.3), 0.3, lp[1]+srr(-0.3,0.3),
-      hex(0xff9fc4), [0.22,0.45,0.22], [0.25,0,0.2], [0.25,0.06,0.12]);
-  }
+  return best;
 }
+(function () {
+  var grass = hex(0x9fd27a), grassDeep = hex(0x86c066), sand = hex(0xe8d3a8), sandWet = hex(0xcdb58c);
+  var stat = new Builder();
+  SHORE.banks.forEach(function (b) {
+    stat.add(blobTris(40, 18, function (x, y, z) {
+      var ang = Math.atan2(z, x), wob = 1 + 0.06 * Math.sin(ang * 5 + b[0]) + 0.04 * Math.sin(ang * 9 + b[1]);
+      var top = Math.max(y, -0.4);
+      if (top > 0.3) top = 0.3 + (top - 0.3) * 0.55 + 0.08 * Math.sin(x * 6 + b[0]) * Math.sin(z * 5 + b[1]); // rolling grassy top
+      return [x * wob, top, z * wob];
+    }), M(b[0], -0.12, b[1], 0, b[5], 0, b[2], b[4], b[3]), { paint: function (q) {
+      var c = q[1] > 0.3 ? mixc(grass, grassDeep, 0.5 + 0.5 * Math.sin(q[0] * 9 + q[2] * 7) * 0.5) : sand;
+      if (q[1] <= 0.3) c = mixc(sand, grass, sstep(0.14, 0.3, q[1]));
+      if (q[1] < 0.22) c = mixc(sandWet, c, sstep(-0.1, 0.22, q[1]));
+      return c;
+    } });
+  });
+  // Moss mounds and little bushes on the banks (soft, chunky clay lumps as in the storybook).
+  for (var mi = 0; mi < 60; mi++) {
+    var mx = srr(-24, 24), mz = srr(-23, 20), mt = bankTop(mx, mz);
+    if (mt < 0.1 || !shoreOK(mx, mz, 2.2)) continue;
+    var ms = srr(0.35, 0.9);
+    stat.add(blobTris(16, 10, function (x, y, z) { return [x, Math.max(y, -0.3) * 0.75, z]; }), M(mx, mt + ms * 0.15, mz, 0, srr(0, 6), 0, ms),
+      mixc(hex(0x7fb85a), hex(0x9bcf6e), srand()));
+  }
+  // Mossy rounded rocks along the banks and in the shallows.
+  var rock = hex(0xbab4aa), rockDark = hex(0x9c958c), moss = hex(0x8cbf5a);
+  var rocks = [[-9.6, -10.6, 0.9], [-7.8, -11.8, 0.6], [10.6, -9.2, 1.0], [12.2, -7.4, 0.65], [-14.8, -6.8, 1.1], [-13.6, -5.2, 0.55],
+               [15.2, 4.2, 0.95], [14.0, 6.0, 0.5], [-12.4, 7.6, 0.8], [-3.5, 12.6, 0.7], [6.6, 12.4, 0.85], [-18.0, 4.5, 0.9],
+               [18.6, -8.5, 0.8], [3.5, -12.6, 0.55], [-1.4, -13.0, 0.75]];
+  rocks.forEach(function (r, i) {
+    var top = Math.max(0, bankTop(r[0], r[1]));
+    stat.add(blobTris(22, 14, function (x, y, z) {
+      var k = 1 + 0.12 * Math.sin(x * 3 + i) * Math.cos(z * 2 + i * 0.7);
+      return [x * k, Math.max(y, -0.35) * 0.72, z * k * 0.92];
+    }), M(r[0], top + r[2] * 0.2, r[1], 0, i * 1.3, 0, r[2]), { paint: function (q) {
+      var c = mixc(rock, rockDark, 0.5 + 0.5 * Math.sin(q[0] * 5.0 + q[2] * 4.0));
+      return mixc(c, moss, sstep(0.38, 0.6, q[1] + 0.08 * Math.sin(q[0] * 7)));
+    } });
+  });
+  // Pastel stepping stones in the shallows on the left.
+  [[-12.2, 1.2, 0xf3c6c2], [-13.6, 2.4, 0xd9c8ef], [-12.6, 3.9, 0xf6dcae], [-14.2, 5.3, 0xbfe2d0]].forEach(function (s, i) {
+    stat.add(blobTris(18, 10), M(s[0], 0.02, s[1], 0, i, 0, 0.62, 0.2, 0.5), hex(s[2]));
+  });
+  // Grass tufts and flowers planted on bank tops.
+  var bladeTris = coneTris(1, 1, 3), fl = [0xffffff, 0xf7a8c0, 0xc9b6f2, 0xffd36e];
+  for (var gi = 0; gi < 1500; gi++) {
+    var gx = srr(-24, 24), gz = srr(-23, 20), top = bankTop(gx, gz);
+    if (top < 0.05 || !shoreOK(gx, gz, 2)) continue;
+    if (srand() < 0.7) {
+      for (var bl = 0; bl < 5; bl++) {
+        var h = srr(0.28, 0.6), ang = srr(0, 6.28);
+        stat.add(bladeTris, M(gx + Math.cos(ang) * 0.12, top + h * 0.5, gz + Math.sin(ang) * 0.12, srr(-0.35, 0.35), ang, srr(-0.35, 0.35), 0.045, h, 0.02),
+          mixc(hex(0x7fbf5c), hex(0xa9dc84), srand()));
+      }
+    } else {
+      var kind = (srand() * 4) | 0, sh = srr(0.35, 0.7), fc = hex(fl[kind]);
+      stat.add(CYL, M(gx, top + sh * 0.5, gz, 0, 0, 0, 0.025, sh, 0.025), hex(0x6aa84f));
+      if (kind === 3 || kind === 1) {
+        stat.add(latheTris([[0, 0], [0.09, 0.03], [0.13, 0.12], [0.12, 0.2], [0.06, 0.24]], 10), M(gx, top + sh, gz), fc);   // tulip cup
+      } else {
+        for (var pe = 0; pe < 6; pe++) {
+          var pa = pe / 6 * 6.2832;
+          stat.add(SPHERE_LO, M(gx + Math.cos(pa) * 0.11, top + sh, gz + Math.sin(pa) * 0.11, 0, -pa, 0, 0.1, 0.025, 0.05), fc);
+        }
+        stat.add(SPHERE_LO, M(gx, top + sh + 0.02, gz, 0, 0, 0, 0.06, 0.04, 0.06), hex(0xffc94a));
+      }
+    }
+  }
+  // Floating lily pads (notched) with a few lotus flowers.
+  var lilyTris = gridTris(28, 6, function (u, v) {
+    var a = 0.3 + u * (6.2832 - 0.6), r = v;
+    return [Math.cos(a) * r, 0.05 * r * r, Math.sin(a) * r];
+  });
+  var lilies = [[-11.8, -8.6, 1.4], [11.5, 7.6, 1.2], [-11.4, 9.2, 1.0], [8.4, -11.0, 1.1], [-5.8, 11.9, 1.3], [13.6, -3.4, 1.0],
+                [-13.2, -1.8, 0.9], [11.6, 1.2, 0.8], [0.8, 12.2, 0.9]];
+  lilies.forEach(function (L, i) {
+    if (!shoreOK(L[0], L[1], L[2] + 0.4)) return;
+    stat.add(lilyTris, M(L[0], 0.07, L[1], 0, i * 2.1, 0, L[2], 1, L[2]), mixc(hex(0x6db75c), hex(0x86c96d), (i % 3) / 3));
+    if (i % 3 === 0) {
+      for (var lp = 0; lp < 7; lp++) {
+        var la = lp / 7 * 6.2832;
+        stat.add(SPHERE_LO, M(L[0] + Math.cos(la) * 0.2, 0.2, L[1] + Math.sin(la) * 0.2, 0.9, -la, 0, 0.08, 0.2, 0.08), hex(0xf6b8c8));
+      }
+      stat.add(SPHERE_LO, M(L[0], 0.24, L[1], 0, 0, 0, 0.09), hex(0xffd36e));
+    }
+  });
+  // Cherry blossom tree on the far bank (left) and a weeping willow (right).
+  var bark = hex(0x8a6446), blossom = hex(0xf6b8c8), blossomDeep = hex(0xef9fb4);
+  var tx = -7.5, tz = -16.0, tt = bankTop(tx, tz);
+  stat.add(tubeTris([[tx, tt, tz], [tx + 0.2, tt + 1.6, tz + 0.1], [tx - 0.3, tt + 3.0, tz - 0.1]], function (t) { return 0.42 - t * 0.2; }, 12), M(), bark);
+  stat.add(tubeTris([[tx, tt + 2.2, tz], [tx + 1.4, tt + 3.2, tz + 0.3]], function (t) { return 0.2 - t * 0.08; }, 8), M(), bark);
+  stat.add(tubeTris([[tx - 0.1, tt + 2.6, tz], [tx - 1.6, tt + 3.4, tz + 0.4]], function (t) { return 0.18 - t * 0.07; }, 8), M(), bark);
+  [[0, 4.3, 0, 2.2], [1.5, 3.9, 0.4, 1.6], [-1.7, 3.9, 0.5, 1.6], [0.4, 4.1, 1.3, 1.4], [-0.6, 3.7, -1.1, 1.4], [0.9, 4.8, -0.4, 1.3]].forEach(function (c, i) {
+    stat.add(blobTris(26, 16, function (x, y, z) { var k = 1 + 0.08 * Math.sin(x * 6 + i) * Math.sin(z * 5); return [x * k, y * 0.8, z * k]; }),
+      M(tx + c[0], tt + c[1], tz + c[2], 0, i, 0, c[3]), { paint: function (q) { return mixc(blossomDeep, blossom, 0.55 + 0.45 * q[1]); } });
+  });
+  for (var bf = 0; bf < 26; bf++) {          // little five-petal flowers dotted on the canopy
+    var ba = srand() * 6.28, bb = srr(0.15, 1.2), br2 = 2.0;
+    stat.add(SPHERE_LO, M(tx + Math.cos(ba) * Math.cos(bb) * br2, tt + 4.3 + Math.sin(bb) * br2 * 0.8, tz + Math.sin(ba) * Math.cos(bb) * br2, 0, 0, 0, 0.13, 0.05, 0.13), hex(0xffe3ea));
+  }
+  var wx = 9.0, wz = -16.5, wt = bankTop(wx, wz);
+  stat.add(tubeTris([[wx, wt, wz], [wx - 0.2, wt + 2.0, wz], [wx + 0.1, wt + 3.6, wz]], function (t) { return 0.5 - t * 0.22; }, 12), M(), hex(0x7b5a3f));
+  stat.add(blobTris(30, 16, function (x, y, z) { return [x, Math.max(y, -0.2), z]; }), M(wx, wt + 4.0, wz, 0, 0, 0, 2.6, 1.3, 2.4), hex(0x8fc46a));
+  var shoreMesh = stat.upload(58);
+  clayItem(shoreMesh, M());
+  // Willow strands: a few swaying groups so the canopy breathes.
+  var strandMesh = MESH.get('willow-strands', function () {
+    var b = new Builder();
+    for (var w = 0; w < 26; w++) {
+      var a = w / 26 * 6.2832 + srr(-0.1, 0.1), r = srr(1.9, 2.5), len = srr(2.0, 3.1);
+      b.add(tubeTris([[Math.cos(a) * r, 0, Math.sin(a) * r], [Math.cos(a) * r * 1.05, -len * 0.5, Math.sin(a) * r * 1.05], [Math.cos(a) * r * 1.08, -len, Math.sin(a) * r * 1.08]],
+        function (t) { return 0.14 - t * 0.07; }, 6), M(), mixc(hex(0x8fc46a), hex(0x77b257), srand()));
+    }
+    return b.upload(60);
+  });
+  var strands = clayItem(strandMesh, M(wx, wt + 4.2, wz));
+  swayers.push({ item: strands, x: wx, y: wt + 4.2, z: wz, phase: 0.4, amp: 0.035 });
+  // Cattails: tubes with brown heads, in clusters at the water's edge; each cluster sways.
+  var tailMesh = MESH.get('cattails', function () {
+    var b = new Builder();
+    for (var k = 0; k < 5; k++) {
+      var ox = srr(-0.4, 0.4), oz = srr(-0.4, 0.4), h = srr(1.6, 2.7), lean = srr(-0.12, 0.12);
+      var top = [ox + lean * h, h, oz];
+      b.add(tubeTris([[ox, 0, oz], [ox + lean * h * 0.5, h * 0.5, oz], top], function () { return 0.035; }, 6), M(), hex(0x5f9e4a));
+      b.add(SPHERE_MID, M(top[0], top[1] - 0.2, top[2], 0, 0, lean, 0.09, 0.3, 0.09), hex(0x8a5a3a));
+      b.add(coneTris(1, 1, 5), M(ox + srr(-0.2, 0.2), h * 0.36, oz + srr(-0.2, 0.2), srr(-0.2, 0.2), srr(0, 6), lean * 2, 0.06, h * 0.75, 0.02), hex(0x6fae55));
+    }
+    return b.upload(60);
+  });
+  [[-10.8, -9.6], [10.4, -10.4], [-15.6, -2.0], [16.4, 2.6], [-14.0, 8.8], [12.0, 10.4], [-4.8, -13.4], [4.6, -13.6], [-1.0, 13.4]].forEach(function (c, i) {
+    var it = clayItem(tailMesh, M(c[0], Math.max(0, bankTop(c[0], c[1])), c[1], 0, i * 1.7, 0));
+    swayers.push({ item: it, x: c[0], y: Math.max(0, bankTop(c[0], c[1])), z: c[1], phase: i * 1.3, amp: 0.05, ry: i * 1.7 });
+  });
+})();
 
 // Soft dark blob shadow under the frog: stepped-alpha rings fake a radial fade.
 // It follows the frog and stays flat on the pad surface.
@@ -986,30 +1195,166 @@ function makeBlobShadowMesh() {
   return b.upload();
 }
 
-// Frog: lime-green low-poly shapes with glowing eyes and a small leaf cape.
-// It starts in the centre facing the camera (+Z). Movement keys, speed, hop and clamp stay the same; facing follows the mouse.
+// Frog: chubby clay frog (pear body, no neck, eye domes, glossy pupils, pink cheeks, smile),
+// yellow polka-dot bandana with spring tails, and a little blue watering can (the hero's "weapon").
+// It starts in the centre facing the camera (+Z). Movement, speed, hop and clamp are unchanged;
+// the rig only rewrites each part's local matrix (cosmetic), updateFrog places the whole frog.
+var FROG_PAL = {
+  hero: { skin: 0x76c656, skinBack: 0x5eab46, belly: 0xd3eb9e, cheek: 0xf0849a, band: 0xf7d55a, dot: 0xfff3c4, mouth: 0x3b2a22 },
+  froglet: { skin: 0x72dcc2, skinBack: 0x55c4aa, belly: 0xd6f7ea, cheek: 0xf7a7b6, band: 0xf7d55a, dot: 0xfff3c4, mouth: 0x2f2a28 }
+};
+function frogBodyPoint(x, y, z) {
+  var w = 1 + 0.10 * (0.2 - y);                       // pear: a little wider low down
+  var X = x * 0.88 * w, Z = z * 0.78 * w, Y = 0.68 + y * 0.64;
+  if (Y < 0.10) Y = 0.10 - (0.10 - Y) * 0.18;          // flat seat on the pad
+  Z += 0.07 * Math.max(0, z) * (1 - y * y) + 0.05 * Math.max(0, y); // round belly, head leans forward
+  return [X, Y, Z];
+}
+// Point + outward direction on the body surface for sphere angles (theta around, unit height y).
+function frogSurface(theta, yu, lift) {
+  var s = Math.sqrt(Math.max(0, 1 - yu * yu)), x = s * Math.cos(theta), z = s * Math.sin(theta);
+  var p = frogBodyPoint(x, yu, z), e = 0.01;
+  var px = frogBodyPoint(Math.sqrt(Math.max(0, 1 - yu * yu)) * Math.cos(theta + e), yu, Math.sqrt(Math.max(0, 1 - yu * yu)) * Math.sin(theta + e));
+  var y2 = Math.min(0.999, yu + e), s2 = Math.sqrt(1 - y2 * y2);
+  var py = frogBodyPoint(s2 * Math.cos(theta), y2, s2 * Math.sin(theta));
+  var n = norm(cross(sub(py, p), sub(px, p)));
+  if (n[0] * x + n[2] * z + n[1] * yu < 0) n = [-n[0], -n[1], -n[2]];
+  lift = lift || 0;
+  return { p: [p[0] + n[0] * lift, p[1] + n[1] * lift, p[2] + n[2] * lift], n: n };
+}
+// Matrix that places a unit shape at p with its local +Z along n (for decals and knots).
+function basisMat(p, n, sx, sy, sz) {
+  var up = Math.abs(n[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
+  var t1 = norm(cross(up, n)), t2 = cross(n, t1);
+  return [t1[0]*sx, t1[1]*sx, t1[2]*sx, 0, t2[0]*sy, t2[1]*sy, t2[2]*sy, 0, n[0]*sz, n[1]*sz, n[2]*sz, 0, p[0], p[1], p[2], 1];
+}
+var FROG_FRONT = Math.PI / 2, FROG_KNOT_TH = 0.42, FROG_EYE_Y = 1.2;
+function buildFrogModel(palName) {
+  return MESH.get('frog-' + palName, function () {
+    var P = FROG_PAL[palName], skin = hex(P.skin), back = hex(P.skinBack), belly = hex(P.belly), cheek = hex(P.cheek);
+    var bodyPaint = { paint: function (q) {
+      var c = mixc(skin, back, sstep(-0.1, -0.6, q[2]) * 0.6);
+      var d = (q[0] / 0.56) * (q[0] / 0.56) + ((q[1] - 0.44) / 0.34) * ((q[1] - 0.44) / 0.34);
+      if (q[2] > 0.2) c = mixc(c, belly, sstep(1.05, 0.7, d));
+      for (var s = -1; s <= 1; s += 2) {
+        var dc = Math.hypot(q[0] - s * 0.5, q[1] - 0.98, (q[2] - 0.55) * 0.7);
+        c = mixc(c, cheek, sstep(0.19, 0.07, dc));
+      }
+      return c;
+    } };
+    var pieces = [[blobTris(56, 36, frogBodyPoint), null, bodyPaint]];
+    var mouthAt = frogSurface(FROG_FRONT, 0.43, 0.0);
+    pieces.push([torusArcTris(0.12, 0.022, 3.6, 5.82, 16, 6), M(0, mouthAt.p[1] + 0.09, mouthAt.p[2] - 0.035, -0.32), hex(P.mouth)]);
+    [-1, 1].forEach(function (s) {
+      pieces.push([SPHERE_HI, M(s * 0.34, 1.13, 0.27, 0, 0, 0, 0.27, 0.27, 0.26), skin]);                 // eye dome
+      pieces.push([SPHERE_MID, M(s * 0.64, 0.30, -0.06, 0, 0, 0, 0.34, 0.27, 0.44), skin]);              // haunch
+      pieces.push([SPHERE_MID, M(s * 0.44, 0.07, 0.70, 0, s * 0.35, 0, 0.25, 0.075, 0.22), skin]);        // foot
+      for (var k = -1; k <= 1; k++)
+        pieces.push([SPHERE_MID, M(s * 0.44 + k * 0.11 + s * 0.04, 0.07, 0.90 - Math.abs(k) * 0.04, 0, 0, 0, 0.075, 0.06, 0.08), skin]);
+      pieces.push([tubeTris([[s * 0.68, 0.72, 0.34], [s * 0.58, 0.55, 0.74], [s * 0.24, 0.42, 1.0]],
+        function (t) { return 0.13 - t * 0.025; }, 12), null, skin]);                                     // arm
+    });
+    // Bandana: a cloth band hugging the neck, a triangle over the chest, a knot and polka dots.
+    var band = hex(P.band), dot = hex(P.dot);
+    var bandTris = gridTris(72, 10, function (u, v) {
+      var th = u * 6.2832, dth = Math.abs(Math.atan2(Math.sin(th - FROG_FRONT), Math.cos(th - FROG_FRONT)));
+      var low = 0.10 - 0.45 * Math.max(0, 1 - dth / 1.05);
+      var yu = 0.25 + (low - 0.25) * v;
+      return frogSurface(th, yu, 0.022 + 0.008 * v).p;
+    });
+    pieces.push([bandTris, null, band]);
+    var dots = [[0, 0.05], [-0.3, 0.15], [0.3, 0.15], [-0.15, -0.1], [0.15, -0.1], [0, -0.24], [-0.55, 0.17], [0.55, 0.17],
+      [-0.42, 0.0], [0.42, 0.0], [-0.9, 0.17], [0.9, 0.17], [2.2, 0.17], [3.1, 0.17], [4.1, 0.17]];
+    dots.forEach(function (d) {
+      var sf = frogSurface(FROG_FRONT + d[0], d[1], 0.05);
+      pieces.push([SPHERE_LO, basisMat(sf.p, sf.n, 0.05, 0.05, 0.016), dot]);
+    });
+    var knot = frogSurface(FROG_KNOT_TH, 0.18, 0.07);
+    pieces.push([SPHERE_MID, M(knot.p[0], knot.p[1], knot.p[2], 0, 0, 0, 0.13, 0.11, 0.12), band]);
+    var body = mergeMesh(pieces, 70);
+    // Pupils: glossy black ovals at the front of each eye dome (one mesh, both eyes).
+    var pupils = mergeMesh([[SPHERE_HI, M(-0.34, FROG_EYE_Y, 0.47, 0, 0, 0, 0.16, 0.17, 0.12), hex(0x1d1a1c)],
+                            [SPHERE_HI, M(0.34, FROG_EYE_Y, 0.47, 0, 0, 0, 0.16, 0.17, 0.12), hex(0x1d1a1c)]]);
+    var shine = mergeMesh([[SPHERE_MID, M(-0.29, FROG_EYE_Y + 0.07, 0.585, 0, 0, 0, 0.045), hex(0xffffff)],
+                           [SPHERE_MID, M(0.39, FROG_EYE_Y + 0.07, 0.585, 0, 0, 0, 0.045), hex(0xffffff)],
+                           [SPHERE_MID, M(-0.39, FROG_EYE_Y - 0.06, 0.59, 0, 0, 0, 0.022), hex(0xffffff)],
+                           [SPHERE_MID, M(0.29, FROG_EYE_Y - 0.06, 0.59, 0, 0, 0, 0.022), hex(0xffffff)]], false);
+    // Bandana tails: two soft cloth leaves pointing out of the knot (pivot at the knot).
+    var tails = mergeMesh([[SPHERE_HI, M(0.17, 0.07, 0.0, 0, 0, -0.5, 0.2, 0.075, 0.12), band],
+                           [SPHERE_HI, M(0.15, -0.09, 0.03, 0, 0, 0.45, 0.18, 0.07, 0.11), band],
+                           [SPHERE_MID, basisMat([0.2, 0.08, 0.1], [0.2, 0.3, 0.93], 0.035, 0.035, 0.012), dot]]);
+    // Watering can: lathe body, spout, sprinkler rose, handle. Spout points +Z.
+    var canBlue = hex(0x86c0de), canDark = hex(0x5d93b8);
+    var can = mergeMesh([
+      [latheTris([[0, 0], [0.15, 0], [0.18, 0.02], [0.19, 0.06], [0.19, 0.22], [0.17, 0.26], [0.11, 0.285], [0.0, 0.29]], 28), null, canBlue],
+      [tubeTris([[0, 0.07, 0.12], [0, 0.17, 0.3], [0, 0.29, 0.44]], function (t) { return 0.045 - t * 0.015; }, 10), null, canBlue],
+      [latheTris([[0.0, -0.02], [0.03, 0.0], [0.075, 0.07], [0.075, 0.09], [0.0, 0.095]], 16), M(0, 0.31, 0.47, 0.9), canDark],
+      [torusArcTris(0.13, 0.025, 0.2, 2.95, 18, 6), M(0, 0.2, -0.04, 0, Math.PI / 2, 0), canBlue]
+    ]);
+    // Cream hero ring decal + soft contact shadow are made per instance.
+    return { body: body, pupils: pupils, shine: shine, tails: tails, can: can, knot: knot.p };
+  });
+}
+function ringMesh(rIn, rOut, color, seg) {
+  var b = new Builder(); seg = seg || 48;
+  for (var i = 0; i < seg; i++) {
+    var a1 = i / seg * 6.2832, a2 = (i + 1) / seg * 6.2832;
+    b.quad([Math.cos(a1)*rIn,0,Math.sin(a1)*rIn], [Math.cos(a2)*rIn,0,Math.sin(a2)*rIn],
+           [Math.cos(a2)*rOut,0,Math.sin(a2)*rOut], [Math.cos(a1)*rOut,0,Math.sin(a1)*rOut], color);
+  }
+  return b.upload(false);
+}
 var eyeGlowItems = [], capeItem = null;
 var frogParts = []; // collected after all frog parts are built, for flash/blink/fade
+var heroRig = null;
 {
-  var green = hex(0x8fe04e), dark = hex(0x4da85a), belly = hex(0xeaf7b8);
-  var leafDark = hex(0x1e7a4d), teal = hex(0x17bfa5);
-  part(SPHERE, 0,0.52,-0.05, green, [0.85,0.60,0.75], null, 'frog');        // body
-  part(SPHERE, 0,0.44, 0.36, belly, [0.52,0.40,0.34], null, 'frog');        // belly
-  part(SPHERE, 0,0.95, 0.20, green, [0.72,0.44,0.55], null, 'frog');        // head
-  // Small leaf cape sweeping behind the frog, plus a turquoise neck knot.
-  capeItem = part(CONE, 0,0.62,-0.80, leafDark, [1.0,1.55,0.30], [2.55,0,0], 'frog');
-  part(SPHERE, 0,0.84,0.30, teal, [0.42,0.16,0.42], null, 'frog', [0.02,0.20,0.15]);
-  [-1,1].forEach(function (s) {
-    part(SPHERE, s*0.33,1.28,0.32, green, [0.22,0.22,0.22], null, 'frog');  // eye bump
-    part(SPHERE, s*0.33,1.36,0.40, hex(0xf4fff6), [0.16,0.16,0.16], null, 'frog'); // eye white
-    var iris = part(SPHERE, s*0.33,1.38,0.52, hex(0x54ffe0), [0.105,0.105,0.055], null, 'frog', [0.10,0.95,0.80]);
-    eyeGlowItems.push(iris);                                                  // glowing iris
-    part(SPHERE, s*0.33,1.39,0.58, hex(0x06231f), [0.05,0.075,0.03], null, 'frog'); // pupil
-    part(SPHERE, s*0.72,0.36,-0.25, dark, [0.24,0.24,0.48], null, 'frog');  // hind leg
-    part(SPHERE, s*0.66,0.09,0.38, green, [0.30,0.10,0.24], null, 'frog');  // foot
-    part(CYL,    s*0.58,0.38,0.40, green, [0.10,0.55,0.10], [-0.15,0,s*0.25], 'frog'); // front leg
-  });
+  var FM = buildFrogModel('hero');
+  var GY = PAD_TOP;
+  heroRig = {
+    body: clayItem(FM.body, M(), { dynamic: 'frog', local: M(), aoGround: GY }),
+    pupils: clayItem(FM.pupils, M(), { dynamic: 'frog', local: M(), material: MAT.gloss }),
+    shine: clayItem(FM.shine, M(), { dynamic: 'frog', local: M(), unlit: 1, castShadow: false }),
+    tails: clayItem(FM.tails, M(), { dynamic: 'frog', local: M(FM.knot[0], FM.knot[1], FM.knot[2]) }),
+    can: clayItem(FM.can, M(), { dynamic: 'frog', local: M(0.04, 0.22, 1.02), material: MAT.gloss }),
+    knot: FM.knot, blinkT: 2.5, blinkK: 1, tailA: 0, tailV: 0, canPitch: 0, lookX: 0, lookY: 0, lastX: 0, lastZ: 0
+  };
+  var heroRingItem = add(ringMesh(1.0, 1.07, [1, 0.97, 0.86, 0.32]), compose(0,PAD_TOP+0.025,0,0,0,0,1,1,1), true, 'shadow', null, { unlit: 1 });
+  heroRingItem.castShadow = false;
   frogParts = items.filter(function (it) { return it.dynamic === 'frog'; });
+}
+// Cosmetic rig pose for the hero: blink, pupils follow the aim, bandana tails spring, can pours.
+// Reads gameplay state, never writes it, and uses vfxRand only.
+function animateHero(dt) {
+  var R = heroRig; if (!R) return;
+  R.blinkT -= dt;
+  if (R.blinkT <= 0) { R.blinkT = vfxRange(2.0, 5.0); R.blinkHold = 0.13; }
+  if (R.blinkHold > 0) R.blinkHold -= dt;
+  var closed = (R.blinkHold > 0) || (gameState === 'defeat' || gameState === 'failed') || frog.hurtT > 0.45;
+  R.blinkK += ((closed ? 0.12 : 1) - R.blinkK) * Math.min(1, dt * 30);
+  // Pupils look toward the aim point (or drift when idle).
+  var tx = 0, ty = 0;
+  if (aimPoint && (gameState === 'play' || gameState === 'cleared')) {
+    var dx = aimPoint[0] - frog.x, dz = aimPoint[1] - frog.z, c = Math.cos(-frog.heading), s = Math.sin(-frog.heading);
+    var lx = dx * c + dz * s, lz = -dx * s + dz * c, l = Math.hypot(lx, lz) || 1;
+    tx = Math.max(-1, Math.min(1, lx / l)) * 0.045; ty = Math.max(-1, Math.min(1, (lz - 6) / 12)) * 0.02;
+  } else { tx = Math.sin(ambientTime * 0.7) * 0.03; ty = Math.sin(ambientTime * 0.45) * 0.012; }
+  R.lookX += (tx - R.lookX) * Math.min(1, dt * 12); R.lookY += (ty - R.lookY) * Math.min(1, dt * 12);
+  R.pupils.local = mul(M(R.lookX, FROG_EYE_Y + R.lookY, 0), M(0, 0, 0, 0, 0, 0, 1, R.blinkK, 1, 1));
+  R.pupils.local = mul(R.pupils.local, M(0, -FROG_EYE_Y, 0));
+  R.shine.local = M(R.lookX, R.lookY, 0);
+  R.shine.alpha = R.blinkK > 0.5 ? R.body.alpha : 0;
+  // Bandana tails: a damped spring pushed by movement and hops.
+  var vx = (frog.x - R.lastX) / Math.max(dt, 1e-4), vz = (frog.z - R.lastZ) / Math.max(dt, 1e-4);
+  R.lastX = frog.x; R.lastZ = frog.z;
+  var speed = Math.min(16, Math.hypot(vx, vz));
+  var target = -speed * 0.05 + Math.sin(frog.hop) * 0.18 * (frog.moving ? 1 : 0) + Math.sin(ambientTime * 2.1) * 0.05;
+  R.tailV += ((target - R.tailA) * 90 - R.tailV * 9) * dt; R.tailA += R.tailV * dt;
+  R.tails.local = mul(M(R.knot[0], R.knot[1], R.knot[2]), M(0, 0, 0, 0, 0, R.tailA));
+  // Can: tips forward to pour while firing, kicks back with each shot.
+  var pour = (mouse.down && gameState === 'play') ? 0.42 : 0;
+  R.canPitch += (pour - R.canPitch) * Math.min(1, dt * 10);
+  var kick = recoil * recoil;
+  R.can.local = M(0.04, 0.22 + kick * 0.03, 1.02 - kick * 0.07, R.canPitch + kick * 0.18, 0, 0);
 }
 
 // Fireflies: small glowing low-poly orbs drifting slowly over pond and pad.
@@ -1029,20 +1374,17 @@ var ambientTime = 0;
 function updateAmbient(dt) {
   ambientTime += dt;
   var t = ambientTime;
-  // Glowing rim breathes softly; frog eyes pulse with it.
-  var pulse = 0.5 + 0.5 * Math.sin(t * 1.6);
-  if (rimItem) rimItem.emiScale = 0.8 + pulse * 0.45;
-  if (rimGlowItem) rimGlowItem.alpha = 0.65 + pulse * 0.5;
-  for (var e=0;e<eyeGlowItems.length;e++) eyeGlowItems[e].emiScale = 0.9 + Math.sin(t * 2.3) * 0.18;
-  // Reeds sway gently.
+  // Cattails and willow strands sway in a soft breeze.
   for (var g=0;g<swayers.length;g++){
-    var grp = swayers[g];
-    var gm = compose(grp.x, -0.18, grp.z, 0, 0, Math.sin(t * 0.7 + grp.phase) * 0.03, 1, 1, 1);
-    for (var p=0;p<grp.parts.length;p++) grp.parts[p].item.mat = mul(gm, grp.parts[p].local);
+    var sw = swayers[g];
+    sw.item.mat = compose(sw.x, sw.y, sw.z, Math.sin(t * 0.9 + sw.phase) * sw.amp, sw.ry || 0, Math.sin(t * 0.7 + sw.phase * 1.3) * sw.amp, 1, 1, 1);
   }
-  // Fireflies drift on slow looping paths and twinkle.
+  // Fireflies only come out in the dusk look; by day they stay hidden.
+  var showFlies = look && look.name === 'dusk';
   for (var f=0;f<fireflies.length;f++){
     var fl = fireflies[f];
+    fl.item.alpha = showFlies ? 1 : 0;
+    if (!showFlies) continue;
     var x = fl.bx + Math.sin(t * fl.sp + fl.ph) * 1.1 + Math.sin(t * 0.21 + fl.ph * 2.0) * 0.6;
     var y = fl.by + Math.sin(t * fl.sp * 0.7 + fl.ph * 1.7) * 0.4;
     var z = fl.bz + Math.cos(t * fl.sp * 0.85 + fl.ph) * 1.1;
@@ -1072,27 +1414,12 @@ var arenaDecorItems = [];
 function applyArenaLook() {
   var cfg = ARENAS[arenaIndex];
   arenaBg = cfg.bg.slice();
-  if (waterItem) waterItem.tint = cfg.water.slice();
-  if (padItem) padItem.tint = cfg.pad.slice();
-  for (var i = 0; i < arenaDecorItems.length; i++) {
-    arenaDecorItems[i].mat = compose(0,-30,0,0,0,0,0.001,0.001,0.001);
-    arenaDecorItems[i].alpha = 0;
-  }
+  // Daylight looks per arena (sun, sky, water, grade); the old night tints no longer apply.
+  setLook(ARENA_LOOK[arenaIndex] || 'meadow');
+  if (waterItem) waterItem.tint = [1, 1, 1];
+  if (padItem) padItem.tint = [1, 1, 1];
+  for (var i = 0; i < arenaDecorItems.length; i++) { arenaDecorItems[i].dead = true; arenaDecorItems[i].alpha = 0; }
   arenaDecorItems = [];
-  // A few arena-tinted glow plants and rocks outside the pad, refreshed per arena.
-  for (var k = 0; k < 10; k++) {
-    var a = (k / 10) * 6.2832 + arenaIndex * 0.7, r = PAD_R + 2.2 + ((k * 37 + arenaIndex * 13) % 40) / 10;
-    var x = Math.cos(a) * r, z = Math.sin(a) * r;
-    var h = 0.6 + ((k * 29) % 50) / 60;
-    var st = decor(CYL, x, h / 2 - 0.05, z, hex(0x20705a), [0.06, h, 0.06], [0, 0, 0.1]);
-    var bulb = decor(icosaTris(0.17, 0, srand), x, h + 0.08, z, hex(cfg.plant), [1,1,1], null, cfg.accent);
-    arenaDecorItems.push(st, bulb);
-  }
-  for (var j = 0; j < 4; j++) {
-    var a2 = j * 1.7 + arenaIndex * 1.1 + 0.5, r2 = PAD_R + 3 + j * 0.9;
-    arenaDecorItems.push(decor(icosaTris(0.8, 0.3, srand), Math.cos(a2) * r2, 0.05, Math.sin(a2) * r2,
-      hex(0x4d6b7a), [1, 0.75, 1], [j, j * 2, 0]));
-  }
   var nameEl = document.getElementById('arenaName');
   if (nameEl) nameEl.textContent = 'Arena ' + (arenaIndex + 1) + ' of 5';
 }
@@ -1225,31 +1552,77 @@ function shooterPart(tris, x, y, z, color, scl, rot, emi) {
   return it;
 }
 function buildShooterBody(shooter) {
-  var coral = hex(0xff6b57), coralDark = hex(0xd9483b), coralPale = hex(0xffa08a), finC = hex(0xb93a4a);
-  // Elongated predatory body, pointed snout toward +Z, tail fan at the back.
-  shooterPart(SPHERE, 0, 0, -0.10, coral, [0.62, 0.52, 1.05], null);              // body
-  shooterPart(SPHERE, 0, -0.08, 0.18, coralPale, [0.42, 0.34, 0.70], null);      // pale underside
-  shooterPart(CONE, 0, 0.02, 1.05, coral, [0.42, 0.75, 0.42], [Math.PI/2, 0, 0]); // snout
-  shooterPart(CONE, 0, 0.52, -0.25, finC, [0.10, 0.55, 0.45], [-0.35, 0, 0]);    // dorsal fin
-  shooterPart(CONE, 0, 0.05, -1.25, finC, [0.55, 0.75, 0.14], [0, 0, 0]);        // tail fan (vertical)
-  shooterPart(CONE, 0, 0.42, -1.05, finC, [0.34, 0.45, 0.12], [0.5, 0, 0]);      // upper tail lobe
-  [-1, 1].forEach(function (s) {
-    shooterPart(CONE, s*0.62, -0.12, 0.15, finC, [0.42, 0.55, 0.10], [0.4, 0, s*1.15]); // side fin
-    shooterPart(SPHERE, s*0.34, 0.22, 0.62, hex(0x2a0f0c), [0.17, 0.17, 0.17], null);   // dark eye socket
-    var eye = shooterPart(SPHERE, s*0.34, 0.24, 0.72, hex(0xffe14d), [0.11, 0.11, 0.06], null, [1.0, 0.85, 0.15]);
-    shooter.eyeItems.push(eye);                                                                // glowing yellow eye
-    shooterPart(SPHERE, s*0.20, 0.34, -0.30, coralDark, [0.14, 0.10, 0.30], null);  // stripe
+  // Bubblehead Perch: a grumpy coral fish in a jelly water-bubble helmet, waddling on stubby fins.
+  // The bubble's footprint (radius 1.0) matches SHOOTER_R so what you see is what you can hit.
+  var K = MESH.get('perch', function () {
+    var coral = hex(0xf2795f), coralDeep = hex(0xd85e4a), bellyC = hex(0xffcdb2), lip = hex(0xe0505a), finC = hex(0xf09a6a);
+    var fishPaint = { paint: function (q) {
+      var c = mixc(bellyC, coral, sstep(-0.25, 0.1, q[1]));
+      var stripe = Math.max(0, Math.sin(q[2] * 9.0 + 1.0)) * sstep(0.0, 0.3, q[1]);
+      return mixc(c, coralDeep, stripe * 0.55);
+    } };
+    var body = mergeMesh([
+      [blobTris(40, 26, function (x, y, z) {
+        var taper = z < 0 ? 1 + z * 0.45 : 1 + z * 0.08;
+        return [x * 0.42 * taper, y * 0.48 * taper + (z > 0.6 ? -0.03 : 0), z * 0.66];
+      }), M(0, -0.02, 0), fishPaint],
+      [SPHERE_HI, M(0, -0.13, 0.62, 0, 0, 0, 0.17, 0.08, 0.1), lip],                    // pouty lower lip
+      [SPHERE_HI, M(0, -0.02, 0.63, 0, 0, 0, 0.15, 0.065, 0.09), lip],                   // upper lip
+      [SPHERE_MID, M(0, 0.42, -0.16, -0.45, 0, 0, 0.045, 0.13, 0.28), finC],              // dorsal fin
+      [SPHERE_MID, M(-0.4, -0.12, 0.12, 0, 0.5, 0.9, 0.04, 0.16, 0.12), finC],          // side fins
+      [SPHERE_MID, M(0.4, -0.12, 0.12, 0, -0.5, -0.9, 0.04, 0.16, 0.12), finC],
+      [SPHERE_HI, M(-0.24, 0.17, 0.43, 0, 0, 0, 0.15), hex(0xfffaf2)],                  // eye whites
+      [SPHERE_HI, M(0.24, 0.17, 0.43, 0, 0, 0, 0.15), hex(0xfffaf2)],
+      [tubeTris([[-0.38, 0.33, 0.47], [-0.25, 0.31, 0.53], [-0.12, 0.25, 0.55]], function () { return 0.035; }, 6), null, hex(0x5a2a26)], // grumpy brows
+      [tubeTris([[0.38, 0.33, 0.47], [0.25, 0.31, 0.53], [0.12, 0.25, 0.55]], function () { return 0.035; }, 6), null, hex(0x5a2a26)]
+    ], 60);
+    var pupils = mergeMesh([[SPHERE_MID, M(-0.22, 0.15, 0.56, 0, 0, 0, 0.075, 0.08, 0.04), hex(0x1d1a1c)],
+                            [SPHERE_MID, M(0.22, 0.15, 0.56, 0, 0, 0, 0.075, 0.08, 0.04), hex(0x1d1a1c)],
+                            [SPHERE_MID, M(-0.2, 0.18, 0.595, 0, 0, 0, 0.022), hex(0xffffff)],
+                            [SPHERE_MID, M(0.24, 0.18, 0.595, 0, 0, 0, 0.022), hex(0xffffff)]], false);
+    var cheeks = mergeMesh([[SPHERE_HI, M(-0.3, -0.06, 0.36, 0, 0, 0, 0.15, 0.13, 0.15), hex(0xff8f84)],
+                            [SPHERE_HI, M(0.3, -0.06, 0.36, 0, 0, 0, 0.15, 0.13, 0.15), hex(0xff8f84)]]);
+    var tail = mergeMesh([[blobTris(20, 12, function (x, y, z) { return [x * 0.05, y * (0.26 + Math.abs(z) * 0.1), z * 0.24]; }), M(0, -0.04, -0.22), finC]]);
+    var feet = mergeMesh([[SPHERE_HI, M(-0.36, 0, 0.08, 0, 0.3, 0, 0.2, 0.09, 0.26), coral],
+                          [SPHERE_HI, M(0.36, 0, 0.08, 0, -0.3, 0, 0.2, 0.09, 0.26), coral]]);
+    var bubble = mergeMesh([[SPHERE_HI, M(0, 0, 0, 0, 0, 0, 1.0, 0.74, 1.0), [0.84, 0.95, 0.97, 0.55]]]);
+    var glint = mergeMesh([[torusArcTris(0.66, 0.03, 1.95, 2.45, 10, 5), M(0, 0.1, 0.6, -0.55, 0, 0), [1, 1, 1, 0.55]],
+                           [SPHERE_LO, M(-0.36, 0.44, 0.5, 0, 0, 0, 0.05), [1, 1, 1, 0.7]]], false);
+    return { body: body, pupils: pupils, cheeks: cheeks, tail: tail, feet: feet, bubble: bubble, glint: glint };
   });
-  // Dark jaw line under the snout.
-  shooterPart(SPHERE, 0, -0.16, 0.72, coralDark, [0.34, 0.10, 0.42], null);
+  var G = PAD_TOP;
+  function part(mesh, local, opts) {
+    opts = opts || {}; opts.dynamic = 'shooter'; opts.local = local;
+    var it = clayItem(mesh, local, opts); it.anim = opts.anim || null; it.base = local;
+    shooterParts.push(it); return it;
+  }
+  part(K.body, M(0, -0.04, 0), { aoGround: G });
+  part(K.pupils, M(0, -0.04, 0), { material: MAT.gloss });
+  part(K.cheeks, M(0, -0.04, 0), { anim: 'cheeks' });
+  part(K.tail, M(0, -0.02, -0.66), { anim: 'tail' });
+  part(K.feet, M(0, -0.78, 0), { anim: 'feet', aoGround: G });
+  part(K.bubble, M(0, -0.05, 0), { material: MAT.jelly, transparent: true, anim: 'bubble' });
+  part(K.glint, M(0, -0.05, 0), { unlit: 1, transparent: true, castShadow: false });
   shooter.shadow = add(makeBlobShadowMesh(), compose(shooter.x, PAD_TOP + 0.02, shooter.z, 0, 0, 0, 1.05, 1, 1.35),
     true, 'shooterShadow', null, { unlit: 1 });
+}
+// Cosmetic per-part pose for the Perch (reads the existing warn / bob timers only).
+function perchPartLocal(it, shooter) {
+  var w = shooter.warnT || 0, t = shooter.bob;
+  if (it.anim === 'cheeks') { var k = 1 + w * 0.7; return mul(it.base, mul(M(0, -0.06, 0.36, 0, 0, 0, k, k, k * 0.9), M(0, 0.06, -0.36))); }
+  if (it.anim === 'tail') return mul(it.base, M(0, 0, 0, 0, Math.sin(t * 3.2) * 0.35, 0));
+  if (it.anim === 'feet') return mul(it.base, M(0, Math.abs(Math.sin(t * 2.2)) * 0.05 - w * 0.04, 0, 0, 0, Math.sin(t * 2.2) * 0.25));
+  if (it.anim === 'bubble') { var p = 1 + w * 0.05; return mul(it.base, M(0, 0, 0, 0, 0, 0, p, p, p)); }
+  return it.local;
 }
 // Enemy orange shots + coral pop/spark particles (pooled).
 var enemyShots = [], enemySparks = [];
 var ESHOT_SPEED = BALANCE.enemyShotSpeed, ESHOT_Y = SHOOTER_Y;
-var eshotMesh = (function () { var b = new Builder(); b.add(SPHERE, compose(0,0,0,0,0,0,1,1,1), hex(0xffc46b), [1.0, 0.55, 0.12]); return b.upload(); })();
-var etrailMesh = (function () { var b = new Builder(); b.add(SPHERE, compose(0,0,0,0,0,0,1,1,1), hex(0xff8c3a, 0.5), [0.8, 0.35, 0.05]); return b.upload(); })();
+// Enemy shots are "sour berries": a hot-orange core sitting in a dark plum ring (danger = this shape only).
+var eshotMesh = mergeMesh([[SPHERE_MID, M(0, 0.1, 0, 0, 0, 0, 1, 1, 1), hex(0xff6a3d), [0.55, 0.16, 0.02]],
+                           [SPHERE_LO, M(0, -0.25, 0, 0, 0, 0, 1.38, 0.55, 1.38), hex(0x5a1e2e)],
+                           [SPHERE_LO, M(-0.32, 0.55, 0.3, 0, 0, 0, 0.22), hex(0xffd2a8), [0.4, 0.3, 0.2]]]);
+var etrailMesh = (function () { var b = new Builder(); b.add(SPHERE, compose(0,0,0,0,0,0,1,1,1), hex(0xffb347, 0.45), [0.7, 0.35, 0.05]); return b.upload(); })();
 var coralSparkMesh = (function () { var b = new Builder(); b.add(icosaTris(0.11, 0, srand), compose(0,0,0,0,0,0,1,1,1), hex(0xff8a70), [0.9, 0.35, 0.15]); return b.upload(); })();
 for (var ei = 0; ei < 96; ei++) {
   var ec = add(eshotMesh, compose(0,-20,0,0,0,0,0.001,0.001,0.001), false, 'eshot');
@@ -2101,18 +2474,20 @@ function updateOneShooter(shooter, dt) {
   }
   shooter.hitT = Math.max(0, shooter.hitT - dt * 6);
   shooter.bob += dt * 2.2;
-  var bobY = Math.sin(shooter.bob) * 0.10;
-  var wag = Math.sin(shooter.bob * 1.4) * 0.07;
-  var sm = compose(shooter.x, SHOOTER_Y + bobY, shooter.z, 0, shooter.heading + wag, 0, 1, 1, 1);
+  // Waddle: a little bounce and side-to-side roll on its stubby fins (cosmetic only).
+  var bobY = Math.abs(Math.sin(shooter.bob * 1.1)) * 0.06;
+  var wag = Math.sin(shooter.bob * 1.1) * 0.06;
+  var sm = compose(shooter.x, SHOOTER_Y + bobY, shooter.z, 0, shooter.heading, wag, 1, 1, 1);
   // White hit-flash overrides the coral; warning adds a warm brightening on top.
   var flash = shooter.hitT, warn = shooter.warnT;
   for (var q = 0; q < shooter.parts.length; q++) {
     var it = shooter.parts[q];
-    it.mat = mul(sm, it.local);
+    it.mat = mul(sm, it.anim ? perchPartLocal(it, shooter) : it.local);
     it.emiScale = 1 + warn * 0.55;
     it.flash = flash;
-    it.flashColor = flash > 0.02 ? [1, 1, 1] : [1, 0.92, 0.75];
-    if (flash <= 0.02) it.flash = warn * 0.35;
+    it.flashColor = flash > 0.02 ? [1, 1, 1] : [1, 0.68, 0.28];
+    // Amber warning glows in the bubble helmet only; the fish stays readable inside.
+    if (flash <= 0.02) it.flash = it.anim === 'bubble' ? warn * 0.75 : 0;
   }
   for (var e = 0; e < shooter.eyeItems.length; e++)
     shooter.eyeItems[e].emiScale = 1.05 + warn * 1.3 + flash * 0.8;
@@ -2821,7 +3196,7 @@ for (var si = 0; si < 24; si++) {
 }
 // Muzzle flash: a bright orb at the frog's mouth that flares for a few frames per shot.
 // It is a frog-local part, re-scaled by flashT each step (stored via muzzleItem.local).
-var muzzleItem = part(SPHERE, 0, 0.95, 0.85, hex(0xd8fff8), [0.001, 0.001, 0.001], null, 'frog', [0.4, 1.0, 0.95]);
+var muzzleItem = part(SPHERE, 0.04, 0.6, 1.5, hex(0xeefcff), [0.001, 0.001, 0.001], null, 'frog', [0.4, 0.9, 1.0]);
 muzzleItem.emiScale = 1.6;
 frogParts.push(muzzleItem);
 
@@ -3333,7 +3708,7 @@ function updateShooting(dt) {
   flashT = Math.max(0, flashT - dt * 9);
   recoil = Math.max(0, recoil - dt * 7);
   var fs = 0.02 + flashT * 0.30;
-  muzzleItem.local = compose(0, 0.95, 0.85, 0, 0, 0, fs, fs, fs);
+  muzzleItem.local = compose(0.04, 0.6 - heroRig.canPitch * 0.2, 1.5, 0, 0, 0, fs, fs, fs);
   muzzleItem.emiScale = 0.4 + flashT * 1.6;
   for (var i = 0; i < projectiles.length; i++) {
     var p = projectiles[i];
@@ -4413,6 +4788,7 @@ function updateFrog(dt) {
   // Slight stretch along the dash direction (local +Z after heading) while dashing.
   var stretchZ = dashing ? 1.22 : 1, stretchX = dashing ? 0.92 : 1;
   var recSquashY = 1 - recoil * recoil * 0.22, recSquashXZ = 1 + recoil * recoil * 0.12;
+  animateHero(dt);
   var frogMat = mul(compose(frog.x + recX, PAD_TOP + hopY + breathY + recDip, frog.z + recZ, flopRx, frog.heading, 0, 1, 1, 1),
                     compose(0, 0, 0, 0, 0, 0, stretchX * recSquashXZ * (1 - hopSquash * 0.5), brScale * recSquashY * (1 + hopSquash), stretchZ * recSquashXZ));
   for (var i=0;i<items.length;i++){
@@ -4462,36 +4838,6 @@ window.addEventListener('resize', resize);
 resize();
 
 // ---------- renderer 2.0: lighting looks, quality tiers, shadow + post targets, frame render ----------
-// Cosmetic randomness only (never Math.random, so gameplay stays deterministic for parity).
-var _vfxSeed = 99991;
-function vfxRand() { _vfxSeed = (_vfxSeed * 16807) % 2147483647; return (_vfxSeed - 1) / 2147483646; }
-function vfxRange(a, b) { return a + vfxRand() * (b - a); }
-function ortho(l, r, b, t, n, f) {
-  return [2/(r-l),0,0,0, 0,2/(t-b),0,0, 0,0,-2/(f-n),0, -(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1];
-}
-function hexv(h) { return [((h>>16)&255)/255, ((h>>8)&255)/255, (h&255)/255]; }
-// Lighting looks: one per arena (see docs/STYLE.md), plus menu and ending.
-var LOOKS = {
-  meadow:  { sunDir: [0.55, 0.78, 0.42], sun: 0xfff1d6, sunK: 0.95, sky: 0xbfe3f0, skyK: 0.62, gnd: 0x9cbf7a, gndK: 0.42,
-             fog: 0xcfe8e6, fogNear: 30, fogFar: 62, shallow: 0x9ee0ec, deep: 0x4fb0cf,
-             gain: [1.04, 1.02, 0.98], lift: [0.015, 0.012, 0.0], sat: 1.06, bloom: 0.35, vignette: 0.55, emi: 0.35 },
-  noon:    { sunDir: [0.30, 0.92, 0.25], sun: 0xffffff, sunK: 1.0, sky: 0xc6e8f6, skyK: 0.62, gnd: 0xa2c47e, gndK: 0.42,
-             fog: 0xd6eef2, fogNear: 30, fogFar: 62, shallow: 0xa4e6f0, deep: 0x4aaed2,
-             gain: [1.03, 1.03, 1.02], lift: [0.01, 0.01, 0.01], sat: 1.05, bloom: 0.3, vignette: 0.5, emi: 0.3 },
-  golden:  { sunDir: [0.75, 0.55, 0.35], sun: 0xffd9a0, sunK: 1.0, sky: 0xc8dfe6, skyK: 0.55, gnd: 0xb0b878, gndK: 0.42,
-             fog: 0xead8bc, fogNear: 28, fogFar: 60, shallow: 0xa6dcd6, deep: 0x4f9fb8,
-             gain: [1.07, 1.01, 0.92], lift: [0.03, 0.015, 0.0], sat: 1.08, bloom: 0.45, vignette: 0.6, emi: 0.45 },
-  sunset:  { sunDir: [0.85, 0.38, 0.22], sun: 0xffb995, sunK: 0.95, sky: 0xd9c4dc, skyK: 0.58, gnd: 0xb59a8c, gndK: 0.42,
-             fog: 0xf0c9c6, fogNear: 26, fogFar: 58, shallow: 0xb3d6dc, deep: 0x5b8fb5,
-             gain: [1.07, 0.98, 0.98], lift: [0.04, 0.012, 0.03], sat: 1.05, bloom: 0.55, vignette: 0.65, emi: 0.6 },
-  dusk:    { sunDir: [-0.4, 0.6, 0.45], sun: 0xbfc8e6, sunK: 0.7, sky: 0x8ea6c4, skyK: 0.6, gnd: 0x6f7f74, gndK: 0.45,
-             fog: 0x8796ad, fogNear: 24, fogFar: 55, shallow: 0x7fb4c6, deep: 0x335f80,
-             gain: [0.98, 1.0, 1.06], lift: [0.0, 0.01, 0.03], sat: 0.95, bloom: 0.7, vignette: 0.75, emi: 1.0 }
-};
-var ARENA_LOOK = ['meadow', 'noon', 'golden', 'sunset', 'dusk'];
-var look = null;
-function setLook(name) { look = LOOKS[name] || LOOKS.meadow; look.name = name; }
-setLook('meadow');
 
 // Quality tiers. ?tier=high|medium|low overrides; otherwise saved setting, else auto.
 var TIERS = {
@@ -4666,6 +5012,9 @@ function renderFrame(frameView, dimK) {
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     if (it.alpha <= 0 || it.dead) continue;
+    // Pooled items are parked below the world at near-zero scale; skip them entirely.
+    var im = it.mat;
+    if (im[13] < -9 || (Math.abs(im[0]) + Math.abs(im[5]) + Math.abs(im[10])) < 0.01) continue;
     if (it.additive) additive.push(it);
     else if (it.transparent || it.alpha < 1 || it.material === MAT.jelly) blended.push(it);
     else opaque.push(it);
@@ -4920,6 +5269,7 @@ function draw(nowMs) {
     var sa2 = screenShake * screenShake * 0.18;
     frameView = lookAt([cineCam.pos[0] + (Math.random()*2-1)*sa2, cineCam.pos[1] + (Math.random()*2-1)*sa2*0.6, cineCam.pos[2] + (Math.random()*2-1)*sa2], cineCam.at);
   }
+  if (window.__phCam) frameView = lookAt(window.__phCam[0], window.__phCam[1]); // debug close-up camera (?debug only)
   // Boss entrance / cinematics darken arenaBg; the daylight look dims by the same ratio.
   var baseBg = ARENAS[arenaIndex].bg, dimK = Math.max(0.25, Math.min(1.2, lum3(arenaBg) / Math.max(0.001, lum3(baseBg))));
   updateWaterRipples(frameDt);
@@ -5048,6 +5398,7 @@ requestAnimationFrame(draw);
       draws: typeof gfx !== 'undefined' ? gfx.draws : null, tris: typeof gfx !== 'undefined' ? Math.round(gfx.tris) : null,
       tier: typeof gfx !== 'undefined' ? gfx.tier : 'n/a' };
   };
+  PH.cam = function (eye, at) { window.__phCam = eye ? [eye, at || [0, 0, 0]] : null; };
   PH.info = function () { return { items: items.length, w: canvas.width, h: canvas.height, state: gameState }; };
 })();
 </script>

@@ -93,6 +93,13 @@ const SHOTS = [
   ['13-upgrade', (ph) => ph.goto('upgrade', 1), 1],
   ['14-fail', (ph) => ph.goto('fail', 1), 120],
   ['15-ending', (ph) => ph.goto('ending'), 600],
+  ['20-hero-close', (ph) => { ph.goto('play', 1); setLook('meadow'); ph.cam([frog.x + 1.6, 3.1, frog.z + 4.6], [frog.x, 0.95, frog.z]); }, 2],
+  ['21-hero-side', (ph) => { ph.goto('play', 1); setLook('meadow'); frog.heading = frog.aimHeading = 0.9; ph.cam([frog.x + 4.2, 2.4, frog.z + 1.2], [frog.x, 0.9, frog.z]); }, 2],
+  ['22-perch-close', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; var e = ph.spawn('S', 0, -4); frog.x = 0; frog.z = 0; ph.cam([1.8, 2.8, -0.6], [0, 1.0, -4]); }, 30],
+  ['23-perch-warn', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; var e = ph.spawn('S', 0, -4); e.state = 'warn'; e.warnDur = 0.55; e.timer = 0.2; ph.cam([1.8, 2.8, -0.6], [0, 1.0, -4]); }, 12],
+  ['24-diorama-low', (ph) => { ph.goto('play', 0); ph.cam([0, 7, 19], [0, 0.5, -2]); }, 30],
+  ['25-face-on', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 2; frog.heading = frog.aimHeading = 0; ph.cam([0.4, 2.2, 6.2], [0, 0.85, 2]); }, 2],
+  ['26-hero-and-perch', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; ph.spawn('S', 2.4, -1.5); frog.x = -1.2; frog.z = 1.2; ph.cam([-0.5, 4.2, 8.2], [0.4, 0.8, 0]); }, 20],
 ];
 async function shots() {
   const file = opt('file', 'pondhive.html');
@@ -106,7 +113,7 @@ async function shots() {
     if (only && !name.includes(only)) continue;
     await page.evaluate(({ src, steps, script }) => {
       const ph = window.__ph;
-      ph.stepMode(true); ph.seed(7); ph.stepCount = 0;
+      ph.stepMode(true); ph.seed(7); ph.stepCount = 0; ph.cam(null); ph.aim(null);
       (0, eval)('(' + src + ')')(ph);
       ph.step(steps, { script, render: true });
     }, { src: go.toString(), steps, script: !!script });
