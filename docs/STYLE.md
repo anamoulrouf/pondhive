@@ -114,3 +114,22 @@ Looks 2–5 get their full pass in Phase 3.
 - **Berries** are round, with a soft amber halo instead of the old streak (the "carrots"). They cast no shadow.
 - **Debug**: with `?debug`, setting `window.__phHitboxes = true` draws every hit radius as a magenta ring (capture `59-hitbox`).
 - **Budgets**: the pad uses a low-poly disc as its shadow proxy. The crowd test (10 froglets, 4 eggs) is 248 draws and 394k triangles; the boss fight is 134 draws and 283k triangles.
+
+## UI (Phase 6)
+- **Override layer.** A storybook theme sits on top of the original CSS (the block marked `PondHive storybook theme` at the end of `<style>`), so every id and class the game uses still works.
+- **Look**:
+  - cream paper cards (`--paper #fbf4e4`) with a dashed stitched edge
+  - ink text (`#4a3b2a`) in a rounded type stack (`ui-rounded`, then SF Pro Rounded, then Arial Rounded MT Bold, with fallbacks)
+  - puffy clay buttons (deep leaf green, or cream for secondary) that press down on click
+  - a sun-yellow focus ring for keyboard use
+- **Logo**: puffy clay "PondHive" lettering (layered shadows plus a text stroke), a frog face in inline SVG peeking over the **H**, and frogspawn on a dotless **ı**. It's built once in JavaScript and shared by the begin screen, the menu and the intro title.
+- **HUD**:
+  - a paper card holding the frog-face health bar, a water-drop dash icon, and the froglet face with its count and timer
+  - a paper pearl counter
+  - a wooden chapter sign: **Chapter n · Name** with **Critters left**
+  - a reed-wrapped boss bar for **Old Grumblegill**
+- **Copy**:
+  - "Companions" becomes **Froglets**, "Enemies" becomes **Critters**, "Enemy shots" becomes **berries**, and eggs become **frogspawn**
+  - "Arena Cleared!" becomes **Chapter Complete!**
+  - Upgrade names are unchanged.
+- **Contrast**: every body text and button pair is at least 4.5:1 (white on the button at its centre is about 4.5–4.8; ink on paper is 9.8). Large headings are at least 3:1; the fail heading is 4.2.
