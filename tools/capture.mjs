@@ -100,6 +100,14 @@ const SHOTS = [
   ['24-diorama-low', (ph) => { ph.goto('play', 0); ph.cam([0, 7, 19], [0, 0.5, -2]); }, 30],
   ['25-face-on', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 2; frog.heading = frog.aimHeading = 0; ph.cam([0.4, 2.2, 6.2], [0, 0.85, 2]); }, 2],
   ['26-hero-and-perch', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; ph.spawn('S', 2.4, -1.5); frog.x = -1.2; frog.z = 1.2; ph.cam([-0.5, 4.2, 8.2], [0.4, 0.8, 0]); }, 20],
+  ['30-sign', (ph) => { ph.goto('play', 0); ph.cam([-10.8, 2.6, 13.2], [-13.9, 1.0, 8.6]); }, 30],
+  ['31-log', (ph) => { ph.goto('play', 0); ph.cam([11.2, 3.0, 13.6], [15.0, 0.6, 9.4]); }, 30],
+  ['32-garden', (ph) => { ph.goto('play', 0); ph.cam([12.4, 3.2, 2.6], [16.6, 0.5, -1.2]); }, 30],
+  ['33-dock', (ph) => { ph.goto('play', 1); ph.cam([-12.0, 3.6, 2.0], [-16.0, 0.5, -3.0]); }, 30],
+  ['34-picnic', (ph) => { ph.goto('play', 2); ph.cam([3.4, 3.4, -10.4], [3.0, 0.5, -14.6]); }, 30],
+  ['35-falls', (ph) => { ph.goto('play', 3); ph.cam([6.2, 3.2, -5.6], [10.8, 1.2, -11.0]); }, 30],
+  ['36-lanterns', (ph) => { ph.goto('play', 4); ph.cam([0, 6.5, 15], [0, 0.5, -2]); }, 30],
+  ['37-life', (ph) => { ph.goto('play', 0); ph.cam([-6, 4.5, -4], [-11.5, 0.5, -10.5]); }, 30],
 ];
 async function shots() {
   const file = opt('file', 'pondhive.html');

@@ -527,7 +527,7 @@ var mainProg = program(
   'uniform float uAlpha; uniform float uEmiScale; uniform float uWater; uniform float uUnlit; uniform float uTime;\n' +
   'uniform float uFlash; uniform vec3 uFlashColor; uniform vec3 uTint; uniform float uMat; uniform float uAO; uniform float uGroundY;\n' +
   'uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uSkyCol; uniform vec3 uGndCol; uniform vec3 uFogCol; uniform vec3 uCamPos;\n' +
-  'uniform vec2 uFog; uniform float uEmiWorld; uniform float uPadR; uniform float uPadNotch;\n' +
+  'uniform vec2 uFog; uniform float uEmiWorld; uniform float uPadR; uniform float uPadNotch; uniform float uRain;\n' +
   'uniform sampler2D uShadow; uniform mat4 uLightVP; uniform float uShadowOn; uniform float uShadowTexel;\n' +
   'uniform vec4 uRipples[8]; uniform vec3 uWaterShallow; uniform vec3 uWaterDeep;\n' +
   'uniform vec4 uFocus; uniform float uOutMode; uniform float uDirectGrade;\n' +
@@ -548,12 +548,17 @@ var mainProg = program(
   ' vec3 alb=vCol.rgb*uTint; float a=vCol.a*uAlpha; vec3 col;\n' +
   ' float sh=shadowAt(vWorld,n);\n' +
   ' if(uWater>0.5){\n' +
-  '  float r=length(vWorld.xz); float deep=smoothstep(uPadR+0.5, uPadR+16.0, r);\n' +
-  '  vec3 base=mix(uWaterShallow,uWaterDeep,deep);\n' +
-  '  base+=vec3(0.85,1.0,1.0)*caustic(vWorld.xz*0.55,uTime)*0.16*(1.0-deep*0.6);\n' +
+  '  float r=length(vWorld.xz); float sh0=vCol.r; float ang=atan(vWorld.z,vWorld.x);\n' +
+  '  vec3 base=mix(uWaterDeep,uWaterShallow,smoothstep(0.0,0.85,sh0));\n' +
+  '  base+=vec3(0.8,1.0,1.0)*caustic(vWorld.xz*0.55,uTime)*0.07*(0.4+0.6*sh0);\n' +
+  '  float cph=fract(sh0*6.0-uTime*0.16); float cl=smoothstep(0.8,0.93,cph)*(1.0-smoothstep(0.93,1.0,cph));\n' +
+  '  cl*=smoothstep(0.1,0.32,sh0)*(1.0-smoothstep(0.9,0.99,sh0))*(0.5+0.5*vnoise(vec3(vWorld.xz*0.5,uTime*0.15)));\n' +
+  '  float foamB=smoothstep(0.9,0.995,sh0)*(0.75+0.25*sin(vWorld.x*3.0+vWorld.z*2.0+uTime*1.5));\n' +
+  '  float foamP=smoothstep(0.32,0.0,abs(r-(uPadR+0.12)))*(0.6+0.4*sin(ang*22.0+uTime*1.3));\n' +
   '  float rings=0.0; for(int i=0;i<8;i++){ vec4 rp=uRipples[i]; if(rp.w>0.0){ float d=length(vWorld.xz-rp.xy); rings+=exp(-pow((d-rp.z)*5.0,2.0))*rp.w; } }\n' +
-  '  float ang=atan(vWorld.z,vWorld.x); float foam=smoothstep(0.55,0.0,abs(r-(uPadR+0.18)))*(0.65+0.35*sin(ang*22.0+uTime*1.3));\n' +
-  '  base=mix(base, vec3(0.97,1.0,1.0), clamp(foam*0.6+rings*0.35,0.0,1.0));\n' +
+  '  float rain=0.0; if(uRain>0.0){ vec2 cp=vWorld.xz*0.9; vec2 ci=floor(cp); vec2 cf=fract(cp)-0.5; float h=fract(sin(dot(ci,vec2(12.9898,78.233)))*43758.5453);\n' +
+  '   float ph2=fract(uTime*0.55+h*3.0); vec2 off=vec2(fract(h*7.13),fract(h*3.71))-0.5; float dd=length(cf-off*0.5); rain=exp(-pow((dd-ph2*0.38)*18.0,2.0))*(1.0-ph2)*step(fract(h*11.7+floor(uTime*0.55+h*3.0)*0.618),0.3)*uRain; }\n' +
+  '  base=mix(base, vec3(0.97,1.0,1.0), clamp(cl*0.42+foamB*0.6+foamP*0.45+rings*0.35+rain*0.55,0.0,1.0));\n' +
   '  vec3 H=normalize(L+V); vec3 wn=normalize(vec3(sin(vWorld.x*2.1+uTime*1.3)*0.06, 1.0, sin(vWorld.z*1.7-uTime*1.1)*0.06));\n' +
   '  float spec=pow(max(dot(wn,H),0.0),180.0)*1.4;\n' +
   '  col=base*(0.62+0.38*sh)+uSunCol*spec*sh;\n' +
@@ -711,19 +716,19 @@ function hexv(h) { return [((h>>16)&255)/255, ((h>>8)&255)/255, (h&255)/255]; }
 // Lighting looks: one per arena (see docs/STYLE.md), plus menu and ending.
 var LOOKS = {
   meadow:  { sunDir: [0.5, 0.8, 0.45], sun: 0xfff0d2, sunK: 0.74, sky: 0xb4d9ec, skyK: 0.4, gnd: 0x8fae6c, gndK: 0.24,
-             fog: 0xd3e9e6, fogNear: 30, fogFar: 62, shallow: 0x9ad8e2, deep: 0x5aaecb,
+             fog: 0xd3e9e6, fogNear: 30, fogFar: 62, shallow: 0x92dde8, deep: 0x3aa5d4,
              gain: [0.98, 0.97, 0.94], lift: [0.02, 0.018, 0.01], sat: 1.04, bloom: 0.1, vignette: 0.6, emi: 0.35 },
-  noon:    { sunDir: [0.30, 0.92, 0.25], sun: 0xffffff, sunK: 0.80, sky: 0xc6e8f6, skyK: 0.41, gnd: 0xa2c47e, gndK: 0.25,
-             fog: 0xd6eef2, fogNear: 30, fogFar: 62, shallow: 0xa4e6f0, deep: 0x4aaed2,
+  noon:    { sunDir: [0.30, 0.92, 0.25], sun: 0xffffff, sunK: 0.74, sky: 0xc6e8f6, skyK: 0.38, gnd: 0xa2c47e, gndK: 0.25,
+             fog: 0xd6eef2, fogNear: 30, fogFar: 62, shallow: 0x98e3ee, deep: 0x33a2d8,
              gain: [0.98, 0.98, 0.97], lift: [0.01, 0.01, 0.01], sat: 1.11, bloom: 0.10, vignette: 0.5, emi: 0.3 },
   golden:  { sunDir: [0.75, 0.55, 0.35], sun: 0xffd9a0, sunK: 0.80, sky: 0xc8dfe6, skyK: 0.36, gnd: 0xb0b878, gndK: 0.25,
-             fog: 0xead8bc, fogNear: 28, fogFar: 60, shallow: 0xa6dcd6, deep: 0x4f9fb8,
+             fog: 0xead8bc, fogNear: 28, fogFar: 60, shallow: 0x9fdcd2, deep: 0x3d97bf,
              gain: [1.02, 0.96, 0.87], lift: [0.03, 0.015, 0.0], sat: 1.14, bloom: 0.16, vignette: 0.6, emi: 0.45 },
-  sunset:  { sunDir: [0.85, 0.38, 0.22], sun: 0xffb995, sunK: 0.76, sky: 0xd9c4dc, skyK: 0.38, gnd: 0xb59a8c, gndK: 0.25,
-             fog: 0xf0c9c6, fogNear: 26, fogFar: 58, shallow: 0xb3d6dc, deep: 0x5b8fb5,
-             gain: [1.02, 0.93, 0.93], lift: [0.04, 0.012, 0.03], sat: 1.11, bloom: 0.19, vignette: 0.65, emi: 0.6 },
+  sunset:  { sunDir: [0.85, 0.42, 0.22], sun: 0xffc4a2, sunK: 0.76, sky: 0xe0c8e2, skyK: 0.38, gnd: 0x9cae80, gndK: 0.25,
+             fog: 0xf0c9c6, fogNear: 26, fogFar: 58, shallow: 0xa9d6e6, deep: 0x4a88c2,
+             gain: [1.02, 0.95, 0.96], lift: [0.03, 0.012, 0.03], sat: 1.11, bloom: 0.19, vignette: 0.65, emi: 0.6 },
   dusk:    { sunDir: [-0.4, 0.6, 0.45], sun: 0xbfc8e6, sunK: 0.56, sky: 0x8ea6c4, skyK: 0.40, gnd: 0x6f7f74, gndK: 0.27,
-             fog: 0x8796ad, fogNear: 24, fogFar: 55, shallow: 0x7fb4c6, deep: 0x335f80,
+             fog: 0x8796ad, fogNear: 24, fogFar: 55, shallow: 0x6aa3c0, deep: 0x2a5a80, rain: 1,
              gain: [0.93, 0.95, 1.01], lift: [0.0, 0.01, 0.03], sat: 1.01, bloom: 0.24, vignette: 0.75, emi: 1.0 }
 };
 var ARENA_LOOK = ['meadow', 'noon', 'golden', 'sunset', 'dusk'];
@@ -882,17 +887,8 @@ function decor(tris, px,py,pz, color, scl, rot, emi) {
   return part(tris, px,py,pz, color, scl, rot, null, emi);
 }
 
-// Water: one big dark teal disc with a gentle moving shimmer in the shader.
+// Water is built after the shore (its depth field needs the banks and rocks); see below.
 var waterItem = null, padItem = null, arenaBg = [0.016, 0.13, 0.18];
-{
-  var wb = new Builder(), base = hex(0x07394a), SEG = 44, R = 60;
-  for (var i=0;i<SEG;i++){
-    var a1=i/SEG*6.2832, a2=(i+1)/SEG*6.2832;
-    wb.tri([0,0,0],[Math.cos(a2)*R,0,Math.sin(a2)*R],[Math.cos(a1)*R,0,Math.sin(a1)*R],
-      shade(base, i%2 ? 0.92 : 1.08));
-  }
-  waterItem = add(wb.upload(), compose(0,0,0,0,0,0,1,1,1), false, null, null, { water: 1 });
-}
 
 // Lily pad arena: a broad clay lily pad like the storybook references: yellow-green, lighter at
 // the centre, a V-notch and midrib slit at the back, soft curved veins painted per pixel by the
@@ -953,9 +949,23 @@ function bankTop(x, z) {
   }
   return best;
 }
+// Decoration-only seeded generator (Phase 3 props), separate from srand so existing layouts stay put.
+var _decoSeed = 4242;
+function drand() { _decoSeed = (_decoSeed * 16807) % 2147483647; return (_decoSeed - 1) / 2147483646; }
+function drr(a, b) { return a + drand() * (b - a); }
+// Point on a bank's ellipse outline (k = 1 is roughly the waterline), in world space.
+function bankEdgePoint(b, ang, k) {
+  var lx = Math.cos(ang) * b[2] * k, lz = Math.sin(ang) * b[3] * k, c = Math.cos(-b[5]), s = Math.sin(-b[5]);
+  return [b[0] + lx * c + lz * s, b[1] - lx * s + lz * c];
+}
+function boxTris(w, h, d) {
+  var x = w / 2, y = h / 2, z = d / 2, P = [[-x,-y,-z],[x,-y,-z],[x,y,-z],[-x,y,-z],[-x,-y,z],[x,-y,z],[x,y,z],[-x,y,z]], t = [];
+  [[4,5,6,7],[1,0,3,2],[5,1,2,6],[0,4,7,3],[7,6,2,3],[0,1,5,4]].forEach(function (f) { t.push([P[f[0]],P[f[1]],P[f[2]]], [P[f[0]],P[f[2]],P[f[3]]]); });
+  return t;
+}
 (function () {
   var grass = hex(0x9fd27a), grassDeep = hex(0x86c066), sand = hex(0xe8d3a8), sandWet = hex(0xcdb58c);
-  var stat = new Builder();
+  var stat = new Builder(), fine = new Builder(); // fine: small decor that casts no shadow
   SHORE.banks.forEach(function (b) {
     stat.add(blobTris(40, 18, function (x, y, z) {
       var ang = Math.atan2(z, x), wob = 1 + 0.06 * Math.sin(ang * 5 + b[0]) + 0.04 * Math.sin(ang * 9 + b[1]);
@@ -1004,20 +1014,20 @@ function bankTop(x, z) {
     if (srand() < 0.7) {
       for (var bl = 0; bl < 5; bl++) {
         var h = srr(0.28, 0.6), ang = srr(0, 6.28);
-        stat.add(bladeTris, M(gx + Math.cos(ang) * 0.12, top + h * 0.5, gz + Math.sin(ang) * 0.12, srr(-0.35, 0.35), ang, srr(-0.35, 0.35), 0.045, h, 0.02),
+        fine.add(bladeTris, M(gx + Math.cos(ang) * 0.12, top + h * 0.5, gz + Math.sin(ang) * 0.12, srr(-0.35, 0.35), ang, srr(-0.35, 0.35), 0.045, h, 0.02),
           mixc(hex(0x7fbf5c), hex(0xa9dc84), srand()));
       }
     } else {
       var kind = (srand() * 4) | 0, sh = srr(0.35, 0.7), fc = hex(fl[kind]);
-      stat.add(CYL, M(gx, top + sh * 0.5, gz, 0, 0, 0, 0.025, sh, 0.025), hex(0x6aa84f));
+      fine.add(CYL, M(gx, top + sh * 0.5, gz, 0, 0, 0, 0.025, sh, 0.025), hex(0x6aa84f));
       if (kind === 3 || kind === 1) {
-        stat.add(latheTris([[0, 0], [0.09, 0.03], [0.13, 0.12], [0.12, 0.2], [0.06, 0.24]], 10), M(gx, top + sh, gz), fc);   // tulip cup
+        fine.add(latheTris([[0, 0], [0.09, 0.03], [0.13, 0.12], [0.12, 0.2], [0.06, 0.24]], 10), M(gx, top + sh, gz), fc);   // tulip cup
       } else {
         for (var pe = 0; pe < 6; pe++) {
           var pa = pe / 6 * 6.2832;
-          stat.add(SPHERE_LO, M(gx + Math.cos(pa) * 0.11, top + sh, gz + Math.sin(pa) * 0.11, 0, -pa, 0, 0.1, 0.025, 0.05), fc);
+          fine.add(SPHERE_LO, M(gx + Math.cos(pa) * 0.11, top + sh, gz + Math.sin(pa) * 0.11, 0, -pa, 0, 0.1, 0.025, 0.05), fc);
         }
-        stat.add(SPHERE_LO, M(gx, top + sh + 0.02, gz, 0, 0, 0, 0.06, 0.04, 0.06), hex(0xffc94a));
+        fine.add(SPHERE_LO, M(gx, top + sh + 0.02, gz, 0, 0, 0, 0.06, 0.04, 0.06), hex(0xffc94a));
       }
     }
   }
@@ -1056,8 +1066,142 @@ function bankTop(x, z) {
   var wx = 9.0, wz = -16.5, wt = bankTop(wx, wz);
   stat.add(tubeTris([[wx, wt, wz], [wx - 0.2, wt + 2.0, wz], [wx + 0.1, wt + 3.6, wz]], function (t) { return 0.5 - t * 0.22; }, 12), M(), hex(0x7b5a3f));
   stat.add(blobTris(30, 16, function (x, y, z) { return [x, Math.max(y, -0.2), z]; }), M(wx, wt + 4.0, wz, 0, 0, 0, 2.6, 1.3, 2.4), hex(0x8fc46a));
+  // ---- Phase 3: a denser storybook shore (own seeded generator so nothing else shifts) ----
+  SHORE.rings = [];
+  rocks.forEach(function (r) { SHORE.rings.push([r[0], r[1], r[2] * 0.9]); });
+  [[-12.2, 1.2], [-13.6, 2.4], [-12.6, 3.9], [-14.2, 5.3]].forEach(function (s) { SHORE.rings.push([s[0], s[1], 0.45]); });
+  lilies.forEach(function (L) { if (shoreOK(L[0], L[1], L[2] + 0.4)) SHORE.rings.push([L[0], L[1], L[2] * 0.8]); });
+  var ROCK_TRIS = blobTris(14, 9, function (x, y, z) { var k = 1 + 0.12 * Math.sin(x * 3 + z) * Math.cos(z * 2); return [x * k, Math.max(y, -0.35) * 0.72, z * k * 0.92]; });
+  var rockPaint = { paint: function (q) {
+    var c = mixc(rock, rockDark, 0.5 + 0.5 * Math.sin(q[0] * 5.0 + q[2] * 4.0));
+    return mixc(c, moss, sstep(0.38, 0.6, q[1] + 0.08 * Math.sin(q[0] * 7)));
+  } };
+  // Shoreline pebbles and rocks ringing every bank, as in the storybook spreads.
+  SHORE.banks.forEach(function (b) {
+    var n = Math.round((b[2] + b[3]) * 1.5);
+    for (var k = 0; k < n; k++) {
+      var p = bankEdgePoint(b, k / n * 6.2832 + drr(-0.15, 0.15), drr(0.9, 1.0));
+      if (!shoreOK(p[0], p[1], 1.5) || drand() < 0.35) continue;
+      var rs = drr(0.28, 0.7), r0 = Math.max(0, bankTop(p[0], p[1]));
+      stat.add(ROCK_TRIS, M(p[0], r0 + rs * 0.12, p[1], 0, drr(0, 6.28), 0, rs, rs * drr(0.7, 1.0), rs * drr(0.8, 1.1)), rockPaint);
+      SHORE.rings.push([p[0], p[1], rs]);
+    }
+  });
+  // Flowers: five-lobed clay discs with a golden button centre.
+  var FLOWER5 = gridTris(20, 1, function (u, v) { var a = u * 6.2832, r = v * (0.62 + 0.38 * Math.sqrt(Math.abs(Math.cos(a * 2.5)))); return [Math.cos(a) * r, 0.2 * v * v, Math.sin(a) * r]; });
+  var FLOWERC = gridTris(6, 1, function (u, v) { var a = u * 6.2832, r = 0.3 * (1 - v); return [Math.cos(a) * r, 0.08 + 0.12 * Math.sqrt(v), Math.sin(a) * r]; });
+  var FL_COLS = [0xffffff, 0xf7a8c0, 0xc9b6f2, 0xffd36e, 0xff9f7a, 0xf48fb1];
+  function addFlower(x, y, z, s, col, rx, rz) {
+    var inner = shade(col, 0.86);
+    fine.add(FLOWER5, M(x, y, z, rx || 0, drr(0, 6.28), rz || 0, s), { paint: function (q) { return mixc(inner, col, Math.hypot(q[0], q[2]) * 1.6); } });
+    fine.add(FLOWERC, M(x, y, z, rx || 0, 0, rz || 0, s), hex(0xffcf4a));
+  }
+  // Round flowering bushes.
+  var BUSH_TRIS = blobTris(14, 9, function (x, y, z) { var k = 1 + 0.1 * Math.sin(x * 5) * Math.cos(z * 4); return [x * k, Math.max(y, -0.4) * k, z * k]; });
+  for (var bi2 = 0, nb = 0; bi2 < 500 && nb < 24; bi2++) {
+    var bx = drr(-25, 25), bz = drr(-24, 21), bt = bankTop(bx, bz);
+    if (bt < 0.15 || !shoreOK(bx, bz, 2.4)) continue;
+    nb++;
+    var bs = drr(0.45, 0.85), bc = hex(FL_COLS[(drand() * FL_COLS.length) | 0]);
+    stat.add(BUSH_TRIS, M(bx, bt + bs * 0.35, bz, 0, drr(0, 6.28), 0, bs, bs * 0.8, bs), mixc(hex(0x78b858), hex(0x8cc864), drand()));
+    var nf = 8 + ((drand() * 6) | 0);
+    for (var f2 = 0; f2 < nf; f2++) {
+      var th = drand() * 6.2832, ph = drr(0.05, 1.1);
+      addFlower(bx + Math.sin(ph) * Math.cos(th) * bs * 0.95, bt + bs * 0.35 + Math.cos(ph) * bs * 0.76, bz + Math.sin(ph) * Math.sin(th) * bs * 0.95,
+        drr(0.16, 0.22), bc, Math.sin(th) * ph * 0.8, -Math.cos(th) * ph * 0.8);
+    }
+  }
+  // Little patches of tall meadow flowers.
+  for (var pc = 0, np = 0; pc < 400 && np < 34; pc++) {
+    var px = drr(-25, 25), pz = drr(-24, 21), pt = bankTop(px, pz);
+    if (pt < 0.12 || !shoreOK(px, pz, 2.2)) continue;
+    np++;
+    var pcol = hex(FL_COLS[(drand() * FL_COLS.length) | 0]);
+    for (var pf = 0; pf < 7; pf++) {
+      var fx = px + drr(-0.6, 0.6), fz = pz + drr(-0.6, 0.6), ft = bankTop(fx, fz);
+      if (ft < 0.05) continue;
+      var fh = drr(0.25, 0.55);
+      fine.add(CYL, M(fx, ft + fh * 0.5, fz, 0, 0, 0, 0.025, fh, 0.025), hex(0x5f9e4a));
+      addFlower(fx, ft + fh, fz, drr(0.15, 0.22), pcol, drr(-0.3, 0.3), drr(-0.3, 0.3));
+    }
+  }
+  // Red-capped toadstools with cream spots.
+  var CAP = blobTris(12, 8, function (x, y, z) { return [x, Math.max(y, 0) * 0.75, z]; });
+  for (var mu = 0, nm = 0; mu < 300 && nm < 14; mu++) {
+    var ux = drr(-25, 25), uz = drr(-24, 21), ut = bankTop(ux, uz);
+    if (ut < 0.12 || !shoreOK(ux, uz, 2.0)) continue;
+    nm++;
+    var cnt = 1 + ((drand() * 3) | 0);
+    for (var mm = 0; mm < cnt; mm++) {
+      var mx2 = ux + (mm ? drr(-0.35, 0.35) : 0), mz2 = uz + (mm ? drr(-0.35, 0.35) : 0);
+      var s2 = drr(0.6, 1.1) * (mm ? 0.65 : 1), mt2 = Math.max(0.05, bankTop(mx2, mz2));
+      fine.add(CYL, M(mx2, mt2 + 0.13 * s2, mz2, 0, 0, 0, 0.06 * s2, 0.26 * s2, 0.06 * s2), hex(0xfff1dc));
+      fine.add(CAP, M(mx2, mt2 + 0.24 * s2, mz2, 0, 0, 0, 0.2 * s2), hex(0xe5574a));
+      for (var dt2 = 0; dt2 < 4; dt2++) {
+        var da = dt2 / 4 * 6.2832 + mm;
+        fine.add(SPHERE_LO, M(mx2 + Math.cos(da) * 0.11 * s2, mt2 + 0.33 * s2, mz2 + Math.sin(da) * 0.11 * s2, 0, 0, 0, 0.035 * s2, 0.018 * s2, 0.035 * s2), hex(0xfff6e6));
+      }
+    }
+  }
+  // Mossy log with a little ladder down to the water (front-right bank).
+  (function () {
+    var lx = 15.0, lz = 9.4, ax = [0.51, 0, -0.86], tw = [-0.86, 0, -0.51], lt = Math.max(0.2, bankTop(lx, lz)) + 0.32;
+    var a0 = [lx - ax[0] * 1.4, lt, lz - ax[2] * 1.4], a1 = [lx + ax[0] * 1.4, lt, lz + ax[2] * 1.4];
+    stat.add(tubeTris([a0, a1], function () { return 0.4; }, 14), M(), { paint: function (q) {
+      var along = (q[0] - lx) * ax[0] + (q[2] - lz) * ax[2];
+      return Math.abs(along) > 1.36 ? hex(0xe2bf8a) : mixc(hex(0x8a6446), hex(0x7b5a3f), 0.5 + 0.5 * Math.sin(along * 9));
+    } });
+    stat.add(blobTris(16, 8, function (x, y, z) { return [x, Math.max(y, 0) * 0.5, z]; }), M(lx, lt + 0.3, lz, 0, Math.atan2(ax[0], ax[2]), 0, 0.42, 0.35, 1.0), hex(0x86c05a));
+    for (var side = -1; side <= 1; side += 2) {
+      var top = [lx + ax[0] * 0.35 * side + tw[0] * 0.2, lt + 0.25, lz + ax[2] * 0.35 * side + tw[2] * 0.2];
+      var bot = [top[0] + tw[0] * 1.3, -0.1, top[2] + tw[2] * 1.3];
+      stat.add(tubeTris([top, bot], function () { return 0.04; }, 6), M(), hex(0xb88458));
+      if (side < 0) for (var rg = 1; rg <= 4; rg++) {
+        var k2 = rg / 5, p1 = [top[0] + (bot[0] - top[0]) * k2, top[1] + (bot[1] - top[1]) * k2, top[2] + (bot[2] - top[2]) * k2];
+        stat.add(tubeTris([p1, [p1[0] + ax[0] * 0.7, p1[1], p1[2] + ax[2] * 0.7]], function () { return 0.03; }, 5), M(), hex(0xc99a68));
+      }
+    }
+  })();
+  // Wooden "PondHive" sign leaning on the front-left bank; letters are pressed clay runs
+  // rasterised from a canvas at load (no textures, no fonts fetched).
+  (function () {
+    var sx = -13.9, sz = 8.6, st = Math.max(0.1, bankTop(sx, sz));
+    var W = mul(M(sx, st, sz, 0, 0.3, 0), M(0, 0, 0, -0.32, 0, 0));
+    var wood = hex(0xc08a58), woodDark = hex(0x8a5a36);
+    [-0.85, 0.85].forEach(function (x) { stat.add(tubeTris([[x, -0.2, 0], [x, 1.45, 0]], function () { return 0.07; }, 8), W, woodDark); });
+    stat.add(boxTris(2.3, 0.85, 0.12), mul(W, M(0, 1.05, 0)), wood);
+    stat.add(tubeTris([[-1.17, 0.62, 0.02], [1.17, 0.62, 0.02], [1.17, 1.48, 0.02], [-1.17, 1.48, 0.02], [-1.17, 0.62, 0.02]], function () { return 0.045; }, 6), W, woodDark);
+    var cv = document.createElement('canvas'); cv.width = 128; cv.height = 32;
+    var cx = cv.getContext('2d');
+    cx.font = 'bold 25px ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Trebuchet MS", sans-serif';
+    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillStyle = '#fff'; cx.fillText('PondHive', 64, 17);
+    var px = cx.getImageData(0, 0, 128, 32).data, ps = 2.0 / 128, txt = [], zf = 0.068;
+    for (var yy = 0; yy < 32; yy++) {
+      var run = -1;
+      for (var xx = 0; xx <= 128; xx++) {
+        var on = xx < 128 && px[(yy * 128 + xx) * 4 + 3] > 110;
+        if (on && run < 0) run = xx;
+        if (!on && run >= 0) {
+          var x0 = (run - 64) * ps, x1 = (xx - 64) * ps, y0 = 1.05 + (16 - yy - 1) * ps, y1 = y0 + ps;
+          txt.push([[x0, y0, zf], [x1, y0, zf], [x1, y1, zf]], [[x0, y0, zf], [x1, y1, zf], [x0, y1, zf]]);
+          run = -1;
+        }
+      }
+    }
+    stat.add(txt, W, hex(0xfff4dc));
+  })();
+  // Birdhouse on a post by the blossom tree.
+  (function () {
+    var hx = -4.4, hz = -15.6, ht = Math.max(0.1, bankTop(hx, hz));
+    stat.add(CYL, M(hx, ht + 0.85, hz, 0, 0, 0, 0.07, 1.7, 0.07), hex(0x8a5a36));
+    stat.add(boxTris(0.5, 0.5, 0.5), M(hx, ht + 1.95, hz, 0, 0.3, 0), hex(0x9cc3e6));
+    stat.add(boxTris(0.42, 0.06, 0.62), mul(M(hx, ht + 2.32, hz, 0, 0.3, 0), M(-0.14, 0, 0, 0, 0, 0.7)), hex(0xe5785f));
+    stat.add(boxTris(0.42, 0.06, 0.62), mul(M(hx, ht + 2.32, hz, 0, 0.3, 0), M(0.14, 0, 0, 0, 0, -0.7)), hex(0xe5785f));
+    stat.add(SPHERE_LO, mul(M(hx, ht + 1.98, hz, 0, 0.3, 0), M(0, 0, 0.25, 0, 0, 0, 0.09, 0.09, 0.02)), hex(0x3b2a22));
+  })();
   var shoreMesh = stat.upload(58);
   clayItem(shoreMesh, M());
+  clayItem(fine.upload(58), M(), { castShadow: false });
   // Willow strands: a few swaying groups so the canopy breathes.
   var strandMesh = MESH.get('willow-strands', function () {
     var b = new Builder();
@@ -1082,11 +1226,277 @@ function bankTop(x, z) {
     }
     return b.upload(60);
   });
-  [[-10.8, -9.6], [10.4, -10.4], [-15.6, -2.0], [16.4, 2.6], [-14.0, 8.8], [12.0, 10.4], [-4.8, -13.4], [4.6, -13.6], [-1.0, 13.4]].forEach(function (c, i) {
+  [[-10.8, -9.6], [13.6, -9.0], [-15.6, -2.0], [16.4, 2.6], [-16.2, 6.6], [12.0, 10.4], [-4.8, -13.4], [4.6, -13.6], [-1.0, 13.4]].forEach(function (c, i) {
     var it = clayItem(tailMesh, M(c[0], Math.max(0, bankTop(c[0], c[1])), c[1], 0, i * 1.7, 0));
     swayers.push({ item: it, x: c[0], y: Math.max(0, bankTop(c[0], c[1])), z: c[1], phase: i * 1.3, amp: 0.05, ry: i * 1.7 });
   });
 })();
+
+
+// Water: a polar grid whose vertex colour carries "shallowness" (near the pad, banks, rocks and
+// lily pads). The water shader turns it into a turquoise depth gradient, drifting ripple contour
+// lines that ring every shore (as in the storybook spreads) and a soft foam edge.
+function waterShallow(x, z) {
+  var s = Math.exp(-Math.max(0, Math.hypot(x, z) - PAD_R) / 1.5) * 0.78;
+  for (var i = 0; i < SHORE.banks.length; i++) {
+    var b = SHORE.banks[i], c = Math.cos(-b[5]), sn = Math.sin(-b[5]);
+    var lx = (x - b[0]) * c - (z - b[1]) * sn, lz = (x - b[0]) * sn + (z - b[1]) * c;
+    var de = Math.sqrt((lx / b[2]) * (lx / b[2]) + (lz / b[3]) * (lz / b[3]));
+    s = Math.max(s, Math.exp(-Math.max(0, (de - 0.95) * Math.min(b[2], b[3])) / 2.0));
+  }
+  var rg = SHORE.rings || [];
+  for (var k = 0; k < rg.length; k++) s = Math.max(s, Math.exp(-Math.max(0, Math.hypot(x - rg[k][0], z - rg[k][1]) - rg[k][2]) / 0.8) * 0.72);
+  return Math.min(1, s);
+}
+(function () {
+  var rows = [], NA = 220, wb = new Builder(), P = [];
+  for (var r = 8.4; r < 30; r += 0.3) rows.push(r);
+  for (var r2 = 30; r2 <= 62; r2 += 4) rows.push(r2);
+  for (var j = 0; j < rows.length; j++) {
+    P[j] = [];
+    for (var i = 0; i <= NA; i++) {
+      var a = i / NA * 6.2832, x = Math.cos(a) * rows[j], z = Math.sin(a) * rows[j], s = waterShallow(x, z);
+      P[j][i] = [[x, 0, z], [s, s, s, 1]];
+    }
+  }
+  for (var jj = 0; jj < rows.length - 1; jj++) for (var ii = 0; ii < NA; ii++) {
+    var p1 = P[jj][ii], p2 = P[jj][ii + 1], p3 = P[jj + 1][ii + 1], p4 = P[jj + 1][ii];
+    wb.triC(p1[0], p3[0], p2[0], p1[1], p3[1], p2[1]); wb.triC(p1[0], p4[0], p3[0], p1[1], p4[1], p3[1]);
+  }
+  var cs = [0.78, 0.78, 0.78, 1];
+  for (var i2 = 0; i2 < NA; i2++) wb.triC([0, 0, 0], P[0][i2 + 1][0], P[0][i2][0], cs, cs, cs);
+  waterItem = add(wb.upload(false), compose(0, 0, 0, 0, 0, 0, 1, 1, 1), false, null, null, { water: 1 });
+})();
+
+// Per-arena prop sets (only the current arena's set is shown):
+//   0 Lily Meadow: tulip bed, picket fence, watering can     1 Reed Hollow: dock and extra reeds
+//   2 Willow Bend: picnic blanket, tea set, cake, basket      3 Blossom Falls: little waterfall
+//   4 Pike's Deep: paper lanterns and a drizzle
+var HIDDEN_M = M(0, -50, 0), propArena = -1;
+var arenaProps = [[], [], [], [], []];
+var propAnim = { streaks: [], foam: null, fallsPath: null, rainA: null, rainB: null };
+(function () {
+  function group(i, b, opts) { var it = clayItem(b.upload(55), HIDDEN_M, opts); it.propMat = M(); arenaProps[i].push(it); return it; }
+  function lathe(prof, seg) { return latheTris(prof, seg || 14); }
+  // 0: tulip bed on the right bank.
+  var g = new Builder(), gx = 16.6, gz = -1.2, gt = Math.max(0.1, bankTop(gx, gz));
+  g.add(blobTris(16, 8, function (x, y, z) { return [x, Math.max(y, -0.2), z]; }), M(gx, gt, gz, 0, 0, 0, 0.75, 0.2, 1.55), hex(0x8a6446));
+  var TULIP = lathe([[0, 0], [0.07, 0.02], [0.1, 0.1], [0.095, 0.2], [0.065, 0.25]], 10), tcols = [0xf06a6a, 0xf7a8c0, 0xffd36e];
+  for (var tr = 0; tr < 3; tr++) for (var tc = 0; tc < 6; tc++) {
+    var tx = gx + (tr - 1) * 0.32, tz = gz - 1.1 + tc * 0.44, tt = Math.max(gt, bankTop(tx, tz)) + 0.12, th = 0.32 + ((tr + tc) % 3) * 0.06;
+    g.add(CYL, M(tx, tt + th * 0.5, tz, 0, 0, 0, 0.022, th, 0.022), hex(0x5f9e4a));
+    g.add(SPHERE_LO, M(tx + 0.05, tt + th * 0.35, tz, 0, tc, 0.7, 0.09, 0.02, 0.04), hex(0x6fae55));
+    g.add(TULIP, M(tx, tt + th, tz, 0, tc, 0, 1), hex(tcols[(tr + tc) % 3]));
+  }
+  for (var fp = 0; fp < 8; fp++) {
+    var fz2 = gz - 1.55 + fp * 0.44, fx2 = gx - 1.0, ftp = Math.max(0.05, bankTop(fx2, fz2));
+    g.add(boxTris(0.07, 0.5, 0.07), M(fx2, ftp + 0.2, fz2), hex(0xfff8ec));
+    g.add(SPHERE_LO, M(fx2, ftp + 0.46, fz2, 0, 0, 0, 0.05, 0.05, 0.05), hex(0xfff8ec));
+  }
+  [0.12, 0.32].forEach(function (h) { g.add(boxTris(0.04, 0.05, 3.1), M(gx - 1.0, gt + h, gz), hex(0xf6efe0)); });
+  group(0, g);
+  var can = new Builder(), cx = gx - 0.3, cz = gz + 1.95, ct = Math.max(0.1, bankTop(cx, cz));
+  can.add(lathe([[0, 0], [0.2, 0], [0.22, 0.05], [0.22, 0.3], [0.18, 0.34], [0, 0.35]], 16), M(cx, ct, cz), hex(0x7ab8e0));
+  can.add(tubeTris([[cx + 0.18, ct + 0.1, cz], [cx + 0.34, ct + 0.24, cz], [cx + 0.45, ct + 0.4, cz]], function (t) { return 0.035 - t * 0.01; }, 8), M(), hex(0x7ab8e0));
+  can.add(torusArcTris(0.14, 0.025, 0, 3.1416, 10, 6), M(cx, ct + 0.34, cz, 0, 0, 0), hex(0x5f9ccb));
+  group(0, can, { material: MAT.gloss });
+
+  // 1: wooden dock reaching out from the left bank, and extra reeds.
+  var d = new Builder(), ox = -17.8, oz = -3.0, dx = 0.992, dz = 0.127;
+  var Wd = [dx, 0, dz, 0, 0, 1, 0, 0, -dz, 0, dx, 0, ox, 0, oz, 1];
+  for (var pk = 0; pk < 12; pk++) d.add(boxTris(0.34, 0.08, 1.3), mul(Wd, M(pk * 0.4, 0.42, 0, 0, 0, (pk % 2 ? 0.02 : -0.02))), hex(pk % 2 ? 0xb88458 : 0xa8754a));
+  [1.6, 3.0, 4.4].forEach(function (x) { [-0.6, 0.6].forEach(function (z) { d.add(CYL, mul(Wd, M(x, 0.05, z, 0, 0, 0, 0.08, 0.9, 0.08)), hex(0x7b5a3f)); }); });
+  d.add(lathe([[0, 0], [0.15, 0], [0.17, 0.22], [0.18, 0.24]], 12), mul(Wd, M(4.1, 0.46, -0.35)), hex(0x9cc3e6));
+  group(1, d);
+  var reedMesh = MESH.cache['cattails'];
+  [[-13.2, -6.6], [-12.4, 6.4], [13.6, -5.8], [8.8, 12.4], [-8.6, 12.0]].forEach(function (c, i) {
+    var it = clayItem(reedMesh, HIDDEN_M);
+    swayers.push({ item: it, x: c[0], y: Math.max(0, bankTop(c[0], c[1])), z: c[1], phase: i * 0.9 + 3, amp: 0.05, ry: i * 2.3, arena: 1 });
+  });
+
+  // 2: picnic on the back bank: checked blanket, tea set, cake and a basket.
+  var pkb = new Builder(), bx = 3.0, bz = -14.6;
+  for (var ci = 0; ci < 8; ci++) for (var cj = 0; cj < 6; cj++) (function (ci, cj) {
+    pkb.add(gridTris(2, 2, function (u, v) {
+      var x = (ci + u) / 8 * 2.4 - 1.2, z = (cj + v) / 6 * 1.7 - 0.85;
+      return [bx + x, Math.max(0.05, bankTop(bx + x, bz + z)) + 0.04, bz + z];
+    }), M(), (ci + cj) % 2 ? hex(0xf4a3b5) : hex(0xfff4e4));
+  })(ci, cj);
+  function onBlanket(x, z) { return Math.max(0.05, bankTop(bx + x, bz + z)) + 0.06; }
+  var tpx = -0.5, tpz = -0.2, tpy = onBlanket(tpx, tpz);
+  pkb.add(lathe([[0, 0], [0.18, 0], [0.26, 0.08], [0.28, 0.2], [0.22, 0.32], [0.1, 0.36], [0.04, 0.42], [0, 0.44]], 16), M(bx + tpx, tpy, bz + tpz), hex(0xa8e0cf));
+  pkb.add(tubeTris([[bx + tpx + 0.24, tpy + 0.12, bz + tpz], [bx + tpx + 0.38, tpy + 0.22, bz + tpz], [bx + tpx + 0.44, tpy + 0.34, bz + tpz]], function (t) { return 0.04 - t * 0.012; }, 8), M(), hex(0xa8e0cf));
+  pkb.add(torusArcTris(0.13, 0.03, 1.5708, 4.712, 10, 6), M(bx + tpx - 0.24, tpy + 0.2, bz + tpz), hex(0x8fd0bd));
+  pkb.add(SPHERE_LO, M(bx + tpx, tpy + 0.46, bz + tpz, 0, 0, 0, 0.05), hex(0xf6b8c8));
+  [[0.1, 0.35], [0.45, -0.3]].forEach(function (c) {
+    var cy = onBlanket(c[0], c[1]);
+    pkb.add(lathe([[0, 0], [0.16, 0], [0.17, 0.02]], 12), M(bx + c[0], cy, bz + c[1]), hex(0xfff4e4));
+    pkb.add(lathe([[0, 0], [0.07, 0], [0.09, 0.1], [0.095, 0.13]], 12), M(bx + c[0], cy + 0.02, bz + c[1]), hex(0xfff4e4));
+    pkb.add(lathe([[0, 0], [0.085, 0]], 10), M(bx + c[0], cy + 0.12, bz + c[1]), hex(0xb07040));
+  });
+  var ckx = 0.65, ckz = 0.3, cky = onBlanket(ckx, ckz);
+  pkb.add(lathe([[0, 0], [0.3, 0], [0.3, 0.2], [0, 0.2]], 18), M(bx + ckx, cky, bz + ckz), hex(0xfff0dc));
+  pkb.add(lathe([[0.315, 0.15], [0.315, 0.22], [0.2, 0.25], [0, 0.26]], 18), M(bx + ckx, cky, bz + ckz), hex(0xf6b8c8));
+  for (var sb2 = 0; sb2 < 5; sb2++) { var sa = sb2 / 5 * 6.2832; pkb.add(SPHERE_LO, M(bx + ckx + Math.cos(sa) * 0.18, cky + 0.29, bz + ckz + Math.sin(sa) * 0.18, 0, 0, 0, 0.045, 0.055, 0.045), hex(0xe5404a)); }
+  var bkx = 1.6, bkz = -0.5, bky = onBlanket(bkx, bkz);
+  pkb.add(lathe([[0, 0], [0.22, 0], [0.26, 0.2], [0.27, 0.23]], 14), M(bx + bkx, bky, bz + bkz), { paint: function (q) { return Math.sin(q[1] * 60) > 0 ? hex(0xc9955a) : hex(0xb5844c); } });
+  pkb.add(torusArcTris(0.24, 0.025, 0, 3.1416, 12, 6), M(bx + bkx, bky + 0.22, bz + bkz, 0, 0.6, 0), hex(0xa8754a));
+  group(2, pkb);
+
+  // 3: a little waterfall tumbling off a rocky ledge on the back-right bank.
+  var fb = new Builder(), rk = hex(0xbab4aa), rkD = hex(0x9c958c), mossC = hex(0x8cbf5a);
+  var rockP = { paint: function (q) { return mixc(mixc(rk, rkD, 0.5 + 0.5 * Math.sin(q[0] * 5 + q[2] * 4)), mossC, sstep(0.45, 0.7, q[1])); } };
+  var RT = blobTris(16, 10, function (x, y, z) { var k = 1 + 0.12 * Math.sin(x * 3) * Math.cos(z * 2); return [x * k, y * 0.8, z * k]; });
+  var fbase = Math.max(0.1, bankTop(11.2, -11.6));
+  [[11.6, fbase + 0.5, -12.0, 1.3], [12.6, fbase + 0.6, -11.0, 1.0], [10.6, fbase + 0.4, -12.8, 1.0], [11.8, fbase + 1.5, -12.3, 0.9]].forEach(function (r) {
+    fb.add(RT, M(r[0], r[1], r[2], 0, r[0], 0, r[3]), rockP);
+  });
+  var lip = [10.9, fbase + 1.9, -11.2], base = [9.2, 0.02, -9.4], tang = [0.71, 0, 0.7];
+  propAnim.fallsPath = function (v) {
+    var h = 1 - Math.pow(1 - v, 3), k = Math.pow(v, 1.4);
+    return [lip[0] + (base[0] - lip[0]) * h, lip[1] + (base[1] - lip[1]) * k, lip[2] + (base[2] - lip[2]) * h];
+  };
+  fb.add(lathe([[0, 0], [0.55, 0], [0.6, 0.06]], 16), M(11.4, fbase + 1.86, -11.8), hex(0x7fcfe3));
+  group(3, fb);
+  var rib = new Builder();
+  rib.add(gridTris(6, 14, function (u, v) {
+    var p = propAnim.fallsPath(v), w = (u - 0.5) * (0.85 + v * 0.35);
+    return [p[0] + tang[0] * w, p[1] + 0.05 * Math.sin(u * 3.14), p[2] + tang[2] * w];
+  }), M(), { paint: function (q) { var w = 0.5 + 0.5 * Math.sin((q[0] * 0.71 + q[2] * 0.7) * 17); return [0.7 + 0.28 * w, 0.9 + 0.09 * w, 0.97 + 0.03 * w, 0.9]; } }, [0.3, 0.36, 0.4]);
+  group(3, rib, { transparent: true, castShadow: false });
+  var foamB = new Builder();
+  for (var fo = 0; fo < 9; fo++) { var fa = fo / 9 * 6.2832; foamB.add(SPHERE_LO, M(Math.cos(fa) * 0.45, 0.02, Math.sin(fa) * 0.3, 0, fa, 0, 0.24, 0.12, 0.2), hex(0xf6fdff)); }
+  foamB.add(SPHERE_LO, M(0, 0.05, 0, 0, 0, 0, 0.35, 0.14, 0.3), hex(0xffffff));
+  propAnim.foam = clayItem(foamB.upload(55), HIDDEN_M, { castShadow: false });
+  propAnim.foamPos = base;
+  var streakMesh = MESH.get('falls-streak', function () { var b = new Builder(); b.add(SPHERE_LO, M(0, 0, 0, 0, 0, 0, 0.04, 0.13, 0.03), [1, 1, 1, 0.9]); return b.upload(55); });
+  for (var sk = 0; sk < 4; sk++) propAnim.streaks.push(clayItem(streakMesh, HIDDEN_M, { unlit: 1, transparent: true, castShadow: false }));
+
+  // 4: paper lanterns on posts at the water's edge of every bank, and a soft drizzle.
+  var lb = new Builder(), LANT = lathe([[0, 0], [0.13, 0.02], [0.2, 0.16], [0.16, 0.3], [0, 0.32]], 12);
+  SHORE.banks.forEach(function (b, bi) {
+    var c = Math.cos(-b[5]), sn = Math.sin(-b[5]);
+    var lx = -b[0] * c + b[1] * sn, lz = -b[0] * sn - b[1] * c, base0 = Math.atan2(lz / b[3], lx / b[2]);
+    [-0.45, 0.45].forEach(function (off) {
+      var p = bankEdgePoint(b, base0 + off, 0.78), pt = bankTop(p[0], p[1]);
+      if (pt < 0.05 || !shoreOK(p[0], p[1], 1.6)) return;
+      lb.add(tubeTris([[p[0], pt - 0.1, p[1]], [p[0], pt + 1.5, p[1]], [p[0] + 0.25, pt + 1.6, p[1]]], function () { return 0.045; }, 6), M(), hex(0x5e4330));
+      lb.add(LANT, M(p[0] + 0.25, pt + 1.12, p[1]), hex(bi % 2 ? 0xffd9a0 : 0xffc3a8), [1.0, 0.62, 0.22]);
+      lb.add(lathe([[0.1, 0], [0.12, 0.04], [0, 0.07]], 10), M(p[0] + 0.25, pt + 1.43, p[1]), hex(0x5e4330));
+    });
+  });
+  group(4, lb);
+  var rainMesh = MESH.get('drizzle', function () {
+    var b = new Builder();
+    for (var i = 0; i < 260; i++) {
+      var x = drr(-24, 24), z = drr(-22, 20), y = drr(0, 8), a = drr(0, 3.14), ca = Math.cos(a) * 0.012, sa = Math.sin(a) * 0.012;
+      b.quad([x - ca, y, z - sa], [x + ca, y, z + sa], [x + ca, y + 0.42, z + sa], [x - ca, y + 0.42, z - sa], [0.86, 0.93, 1.0, 0.4]);
+    }
+    return b.upload(false);
+  });
+  propAnim.rainA = clayItem(rainMesh, HIDDEN_M, { unlit: 1, transparent: true, castShadow: false });
+  propAnim.rainB = clayItem(rainMesh, HIDDEN_M, { unlit: 1, transparent: true, castShadow: false });
+})();
+function showArenaProps(i) {
+  propArena = i;
+  for (var g = 0; g < arenaProps.length; g++) for (var k = 0; k < arenaProps[g].length; k++) arenaProps[g][k].mat = g === i ? arenaProps[g][k].propMat : HIDDEN_M;
+}
+
+// Pond life: fish cruising at the surface (one leaps now and then), dragonflies and butterflies.
+// Purely cosmetic: driven by ambientTime only.
+var pondFish = [], dragonflies = [], butterflies = [], fishJump = { t: 4, i: 0, p: -1 };
+(function () {
+  var fishMesh = MESH.get('pondfish', function () {
+    var b = new Builder();
+    b.add(blobTris(14, 9, function (x, y, z) { var k = z > 0 ? 1 : 1 - 0.35 * (-z); return [x * k * 0.42, y * k * 0.5, z]; }), M(0, 0, 0, 0, 0, 0, 0.32), { paint: function (q) { return q[1] < -0.1 ? [1, 1, 1, 1] : [0.86, 0.86, 0.86, 1]; } });
+    b.add(gridTris(6, 1, function (u, v) { var a = (u - 0.5) * 1.3; return [Math.sin(a) * 0.22 * v * 0.6, 0.0 + Math.cos(a) * 0.0, -0.3 - 0.2 * v]; }), M(), [0.8, 0.8, 0.8, 1]);
+    b.add(blobTris(8, 6), M(0, 0.02, -0.38, 0, 0, 0, 0.02, 0.1, 0.09), [0.8, 0.8, 0.8, 1]);
+    [-1, 1].forEach(function (s) { b.add(SPHERE_LO, M(s * 0.1, 0.05, 0.2, 0, 0, 0, 0.03), hex(0x2b2222)); });
+    return b.upload(55);
+  });
+  [[12.2, 0.16, 0x7cc4ea, 0], [13.4, -0.12, 0xf2a35f, 1.6], [11.8, 0.1, 0xb7a2e8, 3.1], [14.4, -0.09, 0x7cc4ea, 4.4], [12.8, 0.13, 0xf2a35f, 5.4]].forEach(function (f, i) {
+    var it = clayItem(fishMesh, HIDDEN_M, { castShadow: false });
+    it.tint = hexv(f[2]);
+    pondFish.push({ item: it, R: f[0], w: f[1], a0: f[3], ph: i * 1.7 });
+  });
+  var dfMesh = MESH.get('dragonfly', function () {
+    var b = new Builder();
+    b.add(tubeTris([[0, 0, -0.38], [0, 0, 0.18]], function (t) { return 0.03 + t * 0.012; }, 6), M(), hex(0x3f9ad6));
+    b.add(SPHERE_LO, M(0, 0, 0.22, 0, 0, 0, 0.06), hex(0x2f7fb8));
+    [[-1, 0.06], [1, 0.06], [-1, -0.06], [1, -0.06]].forEach(function (w) {
+      b.add(SPHERE_LO, M(w[0] * 0.2, 0.02, w[1], 0, w[0] * (w[1] > 0 ? -0.15 : 0.15), 0, 0.2, 0.008, 0.05), [0.92, 0.97, 1.0, 0.55]);
+    });
+    return b.upload(55);
+  });
+  [[-11.5, -10.5, 0.2], [12.0, 7.5, 2.1], [6.0, -12.6, 4.0]].forEach(function (d, i) {
+    dragonflies.push({ item: clayItem(dfMesh, HIDDEN_M, { transparent: true, castShadow: false }), bx: d[0], bz: d[1], ph: d[2] });
+  });
+  var bfMesh = MESH.get('butterfly', function () {
+    var b = new Builder();
+    [-1, 1].forEach(function (s) {
+      b.add(SPHERE_LO, M(s * 0.14, 0, 0.05, 0, s * 0.3, 0, 0.14, 0.01, 0.11), [1, 1, 1, 1]);
+      b.add(SPHERE_LO, M(s * 0.11, 0, -0.09, 0, -s * 0.4, 0, 0.1, 0.01, 0.08), [0.92, 0.92, 0.92, 1]);
+    });
+    b.add(tubeTris([[0, 0, -0.12], [0, 0, 0.12]], function () { return 0.02; }, 5), M(), hex(0x3b2a22));
+    return b.upload(55);
+  });
+  [[-13.0, -12.5, 0xffe08a, 0.4], [16.5, 5.0, 0xf7b2c8, 2.2], [-17.0, 2.5, 0xc9b6f2, 4.1]].forEach(function (b, i) {
+    var it = clayItem(bfMesh, HIDDEN_M, { castShadow: false });
+    it.tint = hexv(b[2]);
+    butterflies.push({ item: it, bx: b[0], bz: b[1], ph: b[3] });
+  });
+})();
+function lifePos(o, t, sp, rx, rz, y0, ya) {
+  return [o.bx + Math.sin(t * 0.43 * sp + o.ph) * rx + Math.sin(t * 2.1 * sp + o.ph * 2) * rx * 0.25,
+          y0 + Math.sin(t * 1.3 * sp + o.ph) * ya,
+          o.bz + Math.sin(t * 0.31 * sp + o.ph * 1.7) * rz + Math.cos(t * 1.7 * sp + o.ph) * rz * 0.25];
+}
+function updateLife(dt, t) {
+  var dusk = look && look.name === 'dusk';
+  for (var i = 0; i < pondFish.length; i++) {
+    var f = pondFish[i], a = f.a0 + t * f.w, R = f.R + Math.sin(t * 0.37 + f.ph) * 0.6;
+    var x = Math.cos(a) * R, z = Math.sin(a) * R, vx = -Math.sin(a) * f.w, vz = Math.cos(a) * f.w;
+    var y = -0.03, pitch = 0, hd = Math.atan2(vx, vz) + Math.sin(t * 7 + f.ph) * 0.12;
+    if (fishJump.p >= 0 && fishJump.i === i) { y = -0.03 + 1.1 * Math.sin(Math.PI * fishJump.p); pitch = (fishJump.p - 0.5) * 2.2; }
+    f.item.mat = M(x, y, z, pitch, hd, 0);
+  }
+  if (fishJump.p >= 0) {
+    fishJump.p += dt / 0.85;
+    if (fishJump.p >= 1) { var fj = pondFish[fishJump.i], aj = fj.a0 + t * fj.w; addWaterRipple(Math.cos(aj) * fj.R, Math.sin(aj) * fj.R, 0.7); fishJump.p = -1; fishJump.t = 6 + vfxRand() * 5; }
+  } else if ((fishJump.t -= dt) <= 0) {
+    fishJump.i = (vfxRand() * pondFish.length) | 0; fishJump.p = 0;
+    var fs = pondFish[fishJump.i], as = fs.a0 + t * fs.w; addWaterRipple(Math.cos(as) * fs.R, Math.sin(as) * fs.R, 0.5);
+  }
+  for (var d = 0; d < dragonflies.length; d++) {
+    var df = dragonflies[d], p = lifePos(df, t, 1.0, 1.8, 1.4, 1.15, 0.3), q = lifePos(df, t + 0.05, 1.0, 1.8, 1.4, 1.15, 0.3);
+    df.item.mat = M(p[0], p[1], p[2], 0, Math.atan2(q[0] - p[0], q[2] - p[2]), 0, 1 + 0.15 * Math.sin(t * 70 + d), 1, 1);
+  }
+  for (var b = 0; b < butterflies.length; b++) {
+    var bf = butterflies[b];
+    if (dusk) { bf.item.mat = HIDDEN_M; continue; }
+    var bp = lifePos(bf, t, 0.7, 1.6, 1.2, 1.25, 0.35), bq = lifePos(bf, t + 0.05, 0.7, 1.6, 1.2, 1.25, 0.35);
+    bf.item.mat = M(bp[0], bp[1] + Math.abs(Math.sin(t * 8 + bf.ph)) * 0.12, bp[2], 0, Math.atan2(bq[0] - bp[0], bq[2] - bp[2]), 0, 0.2 + 0.8 * Math.abs(Math.sin(t * 8 + bf.ph)), 1, 1);
+  }
+  // Waterfall streaks + foam (Blossom Falls only).
+  var falls = propArena === 3;
+  for (var s = 0; s < propAnim.streaks.length; s++) {
+    if (!falls) { propAnim.streaks[s].mat = HIDDEN_M; continue; }
+    var v = (t * 0.7 + s / propAnim.streaks.length) % 1, fp = propAnim.fallsPath(v), side = ((s * 0.37) % 1 - 0.5) * 0.6;
+    propAnim.streaks[s].mat = M(fp[0] + 0.71 * side, fp[1] + 0.03, fp[2] + 0.7 * side, 0, 0.78, 0, 1, 0.6 + v, 1);
+  }
+  if (propAnim.foam) {
+    var fpos = propAnim.foamPos, pul = 1 + 0.12 * Math.sin(t * 6);
+    propAnim.foam.mat = falls ? M(fpos[0], 0, fpos[2], 0, t * 0.4, 0, pul, 1, pul) : HIDDEN_M;
+    if (falls) { propAnim.rip = (propAnim.rip || 0) - dt; if (propAnim.rip <= 0) { addWaterRipple(fpos[0], fpos[2], 0.45); propAnim.rip = 1.1; } }
+  }
+  // Drizzle (looks with rain): two stacked copies of one streak field scroll down and loop.
+  var rain = look && look.rain;
+  if (propAnim.rainA) {
+    var o = -((t * 9) % 8);
+    propAnim.rainA.mat = rain ? M(0, o, 0) : HIDDEN_M;
+    propAnim.rainB.mat = rain ? M(0, o + 8, 0) : HIDDEN_M;
+  }
+}
 
 // Soft dark blob shadow under the frog: stepped-alpha rings fake a radial fade.
 // It follows the frog and stays flat on the pad surface.
@@ -1399,8 +1809,10 @@ function updateAmbient(dt) {
   // Cattails and willow strands sway in a soft breeze.
   for (var g=0;g<swayers.length;g++){
     var sw = swayers[g];
+    if (sw.arena !== undefined && sw.arena !== propArena) { sw.item.mat = HIDDEN_M; continue; }
     sw.item.mat = compose(sw.x, sw.y, sw.z, Math.sin(t * 0.9 + sw.phase) * sw.amp, sw.ry || 0, Math.sin(t * 0.7 + sw.phase * 1.3) * sw.amp, 1, 1, 1);
   }
+  updateLife(dt, t);
   // Fireflies only come out in the dusk look; by day they stay hidden.
   var showFlies = look && look.name === 'dusk';
   for (var f=0;f<fireflies.length;f++){
@@ -1438,6 +1850,7 @@ function applyArenaLook() {
   arenaBg = cfg.bg.slice();
   // Daylight looks per arena (sun, sky, water, grade); the old night tints no longer apply.
   setLook(ARENA_LOOK[arenaIndex] || 'meadow');
+  showArenaProps(arenaIndex);
   if (waterItem) waterItem.tint = [1, 1, 1];
   if (padItem) padItem.tint = [1, 1, 1];
   for (var i = 0; i < arenaDecorItems.length; i++) { arenaDecorItems[i].dead = true; arenaDecorItems[i].alpha = 0; }
@@ -5087,7 +5500,7 @@ function renderFrame(frameView, dimK) {
   gl.uniform3f(u.uFogCol, fog[0] * dk, fog[1] * dk, fog[2] * dk);
   gl.uniform2f(u.uFog, look.fogNear, look.fogFar);
   gl.uniform3f(u.uCamPos, cx, cy, cz);
-  gl.uniform1f(u.uEmiWorld, look.emi);
+  gl.uniform1f(u.uEmiWorld, look.emi); gl.uniform1f(u.uRain, look.rain || 0);
   gl.uniform1f(u.uPadR, PAD_R); gl.uniform1f(u.uPadNotch, PAD_NOTCH);
   var sh = hexv(look.shallow), dp = hexv(look.deep);
   gl.uniform3f(u.uWaterShallow, sh[0] * dk, sh[1] * dk, sh[2] * dk);
@@ -5293,7 +5706,8 @@ function draw(nowMs) {
   }
   if (window.__phCam) frameView = lookAt(window.__phCam[0], window.__phCam[1]); // debug close-up camera (?debug only)
   // Boss entrance / cinematics darken arenaBg; the daylight look dims by the same ratio.
-  var baseBg = ARENAS[arenaIndex].bg, dimK = Math.max(0.25, Math.min(1.2, lum3(arenaBg) / Math.max(0.001, lum3(baseBg))));
+  var baseBg = ARENAS[arenaIndex].bg, dimRaw = lum3(arenaBg) / Math.max(0.001, lum3(baseBg));
+  var dimK = Math.max(0.25, Math.min(1.2, dimRaw < 1 ? 1 - (1 - dimRaw) * 0.55 : dimRaw)); // daylight: dim scenes only part-way
   updateWaterRipples(frameDt);
   autoTierSample(frameDt * 1000);
   renderFrame(frameView, dimK);

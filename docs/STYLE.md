@@ -46,3 +46,24 @@ Looks 2–5 get their full pass in Phase 3.
 | Composition: reads as a miniature diorama | 1: gameplay view still sparser than the storybook spreads (Phase 3: sign, log, stream, denser flowers) |
 | Charm: props and activities | 1: activities (reading, tea, picnic, photos) arrive with the menu and ending in Phase 7 |
 | **Total** | **12 / 14** |
+
+## World (Phase 3)
+- **Water** is a polar grid whose vertex colour stores *shallowness* (near the pad, the banks, rocks and lily pads). The shader maps it to a turquoise deep→shallow gradient, with drifting ripple contour lines that ring every shore and soft shore foam. In the dusk look it adds sparse rain rings.
+- **Banks** carry shoreline rocks, flowering bushes, tall flower patches, toadstools, a wooden **PondHive** sign (its letters are rasterised from a canvas at load time and pressed in as geometry, with no textures or fonts fetched), a mossy log with a ladder, and a birdhouse.
+- **Per-arena props.** Only the current arena's set shows (`showArenaProps`):
+
+  | Arena | Look | Props |
+  |---|---|---|
+  | 1 | meadow | tulip bed, picket fence, watering can |
+  | 2 | noon | dock, extra reeds |
+  | 3 | golden | picnic blanket, tea set, cake, basket |
+  | 4 | sunset | waterfall |
+  | 5 | dusk | paper lanterns, drizzle |
+
+- **Pond life**:
+  - five fish cruise at the surface, and one leaps now and then
+  - three dragonflies
+  - three butterflies (hidden at dusk, when the fireflies come out)
+- **Determinism.** The new decor uses its own seeded generator (`drand`), and all animation runs on `ambientTime`. Gameplay never sees any of it.
+- **Budget.** Small decor (grass, flowers, toadstools) lives in a separate mesh that casts no shadow. The boss fight is about 372k triangles across both passes and 178 draws.
+- **Boss dimming.** It now goes only part of the way (`dimK`), so the daylight looks never go murky.
