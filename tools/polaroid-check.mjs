@@ -10,5 +10,5 @@ await p.goto('file://' + path.resolve('pondhive.html') + '?debug');
 await p.waitForFunction(() => window.__ph);
 await p.evaluate(() => { const ph = window.__ph; ph.stepMode(true); ph.seed(7); ph.goto('ending'); for (let i = 0; i < 905; i++) ph.step(1, { render: true }); });
 await p.waitForTimeout(1800);
-await p.screenshot({ path: 'captures/p7-a/77-polaroid-settled.png' });
+await p.screenshot({ path: process.argv[2] || 'captures/final/77-polaroid-settled.png' });
 await b.close();
