@@ -1,6 +1,5 @@
 // PondHive capture + parity tool.
 //   node tools/capture.mjs shots  [--out captures/phase0] [--file index.html] [--tier high]
-//   node tools/capture.mjs parity [--steps 3600] [--arena 1]
 //   node tools/capture.mjs perf   [--file index.html]
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
@@ -35,46 +34,6 @@ async function openGame(browser, file, extra = '') {
 
 const launch = () => chromium.launch({ executablePath: findChrome(), headless: true,
   args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
-
-// ---------------------------------------------------------------- parity
-async function parity() {
-  const steps = +opt('steps', 3600), arena = +opt('arena', 1), seed = +opt('seed', 42);
-  const scenario = opt('scenario', 'arena');
-  const browser = await launch();
-  const runs = [];
-  for (const file of ['baseline/game-turn-22.html', opt('file', 'index.html')]) {
-    const { page, errors } = await openGame(browser, file);
-    const trace = await page.evaluate(({ steps, arena, seed, scenario }) => {
-      const ph = window.__ph;
-      ph.stepMode(true);
-      ph.seed(seed);
-      if (scenario === 'boss') ph.gotoBoss(); else ph.goto('play', arena);
-      ph.stepCount = 0;
-      const out = [];
-      for (let i = 0; i < steps; i += 60) { ph.step(60, { script: true }); out.push(ph.snapshot()); }
-      return out;
-    }, { steps, arena, seed, scenario });
-    runs.push({ file, trace, errors });
-    await page.close();
-  }
-  await browser.close();
-  const [a, b] = runs;
-  let firstDiff = -1;
-  for (let i = 0; i < a.trace.length; i++) {
-    if (JSON.stringify(a.trace[i]) !== JSON.stringify(b.trace[i])) { firstDiff = i; break; }
-  }
-  const last = a.trace[a.trace.length - 1];
-  console.log(`parity scenario=${scenario} arena=${arena} steps=${steps} seed=${seed}`);
-  console.log(`  baseline end: state=${last.state} wave=${last.wave} hp=${last.health} pearls=${last.pearls} eshots=${last.eshots.length}`);
-  for (const r of runs) if (r.errors.length) console.log(`  ERRORS in ${r.file}:\n    ` + r.errors.slice(0, 5).join('\n    '));
-  if (firstDiff < 0 && !runs.some((r) => r.errors.length)) { console.log('  PARITY OK: all', a.trace.length, 'snapshots identical'); return 0; }
-  if (firstDiff >= 0) {
-    console.log(`  PARITY FAIL at snapshot ${firstDiff} (step ${(firstDiff + 1) * 60})`);
-    console.log('  baseline:', JSON.stringify(a.trace[firstDiff]).slice(0, 600));
-    console.log('  pondhive:', JSON.stringify(b.trace[firstDiff]).slice(0, 600));
-  }
-  return 1;
-}
 
 // ---------------------------------------------------------------- screenshots
 const SHOTS = [
@@ -200,5 +159,5 @@ async function perf() {
   return 0;
 }
 
-const code = await ({ parity, shots, perf }[mode] || shots)();
+const code = await ({ shots, perf }[mode] || shots)();
 process.exit(code);

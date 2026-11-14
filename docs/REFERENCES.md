@@ -6,4 +6,3 @@
 - `palette.png` — the colour bible with hex values.
 - `screen-flow.png` — every screen from the begin gate to the polaroid.
 - `colorblind-check.png` — deuteranopia and protanopia simulations of play.
-- `phase2-gate-comparison.png`, `pad-rework-comparison.png` — the approval-gate history.
