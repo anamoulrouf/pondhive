@@ -116,6 +116,18 @@ const SHOTS = [
   ['45-defeat', (ph) => { ph.goto('fail', 1); frog.heading = 0; ph.cam([2.2, 3.2, frog.z + 4.5], [frog.x, 0.5, frog.z]); }, 40],
   ['46-cheer', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 2; frog.heading = frog.aimHeading = 0; gameState = 'cleared'; clearedT = 0.3; ph.cam([0.4, 2.4, 6.6], [0, 1.0, 2]); }, 30],
   ['47-shots', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = -3; frog.z = 1; frog.heading = frog.aimHeading = Math.PI / 2; ph.aim([9, 1]); mouse.down = true; spawnCompanion(-4, 2.5); ph.spawn('S', 5, 1); ph.cam([-1, 3.0, 6.5], [0, 0.5, 1]); }, 40],
+  ['50-crab', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; var e = ph.spawn('C', 0, -2); e.timer = 9; ph.cam([2.4, 3.0, 2.2], [0, 0.9, -2]); }, 20],
+  ['51-crab-warn', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; var e = ph.spawn('C', 0, -2); e.state = 'shake'; e.timer = 0.5; ph.cam([2.4, 3.0, 2.2], [0, 0.9, -2]); }, 8],
+  ['52-crab-dizzy', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; var e = ph.spawn('C', 0, -2); e.state = 'dizzy'; e.timer = 0.9; ph.cam([2.4, 3.0, 2.2], [0, 0.9, -2]); }, 12],
+  ['53-puffer', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; var e = ph.spawn('P', 0, -2); e.timer = 9; ph.cam([2.2, 3.0, 2.2], [0, 1.1, -2]); }, 20],
+  ['54-puffer-swell', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; var e = ph.spawn('P', 0, -2); e.state = 'swell'; e.swellDur = 0.8; e.timer = 0.12; ph.cam([2.2, 3.0, 2.2], [0, 1.1, -2]); }, 3],
+  ['55-boss', (ph) => { ph.gotoBoss(); frog.x = 0; frog.z = 5; ph.cam([5.5, 6.5, 9.0], [0, 1.6, -1.5]); }, 200],
+  ['56-boss-warn', (ph) => { ph.gotoBoss(); frog.x = 0; frog.z = 5; ph.step(140); boss.attack = 'burst'; boss.state = 'warn'; boss.timer = 0.12; boss.warnDur = 0.65; ph.cam([5.5, 6.5, 9.0], [0, 1.6, -1.5]); }, 2],
+  ['57-bonk', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; var e = ph.spawn('C', 0, -2); killCharger(e); ph.cam([2.6, 3.2, 2.6], [0, 0.9, -2]); }, 22],
+  ['58-spawn', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; queueEnemySpawn('S', 0, -2); ph.cam([2.2, 3.0, 2.2], [0, 0.6, -2]); }, 40],
+  ['59-hitbox', (ph) => { window.__phHitboxes = true; ph.goto('play', 3); }, 300, true],
+  ['60-bonk-late', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; var e = ph.spawn('P', 0, -2); killSpreader(e); ph.cam([2.6, 3.4, 3.6], [0, 1.4, -3]); }, 48],
+
 ];
 async function shots() {
   const file = opt('file', 'pondhive.html');
@@ -129,7 +141,7 @@ async function shots() {
     if (only && !name.includes(only)) continue;
     await page.evaluate(({ src, steps, script }) => {
       const ph = window.__ph;
-      ph.stepMode(true); ph.seed(7); ph.stepCount = 0; ph.cam(null); ph.aim(null);
+      ph.stepMode(true); ph.seed(7); ph.stepCount = 0; ph.cam(null); ph.aim(null); window.__phHitboxes = false;
       (0, eval)('(' + src + ')')(ph);
       ph.step(steps, { script, render: true });
     }, { src: go.toString(), steps, script: !!script });

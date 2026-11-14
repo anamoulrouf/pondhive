@@ -925,6 +925,9 @@ MAT.pad = 5;
     return mixc(underC, rimC, sstep(0.05, PAD_TOP - 0.02, q[1]));
   } });
   padItem = clayItem(pb.upload(55), M(), { material: MAT.pad });
+  // Shadow proxy: a plain low-poly disc (the pad only shadows the water just past its rim).
+  var ps = new Builder(); ps.add(latheTris([[0, PAD_TOP + 0.1], [PAD_R, PAD_TOP + 0.1], [PAD_R, 0.05]], 48), M(), [1, 1, 1, 1]);
+  padItem.shadowMesh = ps.upload(false);
 })();
 
 // Pond diorama outside the pad: grassy sand banks, a blossom tree and a willow, mossy rocks,
@@ -1848,6 +1851,8 @@ function updateAmbient(dt) {
     sw.item.mat = compose(sw.x, sw.y, sw.z, Math.sin(t * 0.9 + sw.phase) * sw.amp, sw.ry || 0, Math.sin(t * 0.7 + sw.phase * 1.3) * sw.amp, 1, 1, 1);
   }
   updateLife(dt, t);
+  updateBonks(dt);
+  updateHitboxOverlay();
   // Fireflies only come out in the dusk look; by day they stay hidden.
   var showFlies = look && look.name === 'dusk';
   for (var f=0;f<fireflies.length;f++){
@@ -1929,9 +1934,9 @@ function pickSpawnPos() {
 }
 function queueEnemySpawn(kind, x, z, opts) {
   opts = opts || {};
-  var ring = add(eggRingMesh, compose(x, PAD_TOP + 0.05, z, 0, 0, 0, 1.4, 1, 1.4), true, 'spawnring', null, { additive: true, unlit: 1 });
+  var ring = add(spawnRingMesh, compose(x, PAD_TOP + 0.05, z, 0, 0, 0, 1.4, 1, 1.4), true, 'spawnring', null, { unlit: 1 });
   ring.alpha = 0.4;
-  var orb = add(eggCoreMesh, compose(x, PAD_TOP + 0.8, z, 0, 0, 0, 1.6, 1.6, 1.6), true, 'spawnorb');
+  var orb = add(spawnBubbleMesh, compose(x, PAD_TOP + 0.8, z, 0, 0, 0, 1.6, 1.6, 1.6), true, 'spawnorb');
   pendingSpawns.push({ kind: kind, x: x, z: z, t: opts.delay === undefined ? 1.0 : opts.delay,
     ring: ring, orb: orb, minion: !!opts.minion, onSpawn: opts.onSpawn || null });
 }
@@ -1943,9 +1948,9 @@ function scheduleWave(idx) {
     var pos = pickSpawnPos(), guard = 0;
     while (used.some(function (u) { return Math.hypot(u[0]-pos[0], u[1]-pos[1]) < 3; }) && guard++ < 8) pos = pickSpawnPos();
     used.push(pos);
-    var ring = add(eggRingMesh, compose(pos[0], PAD_TOP + 0.05, pos[1], 0, 0, 0, 1.4, 1, 1.4), true, 'spawnring', null, { additive: true, unlit: 1 });
+    var ring = add(spawnRingMesh, compose(pos[0], PAD_TOP + 0.05, pos[1], 0, 0, 0, 1.4, 1, 1.4), true, 'spawnring', null, { unlit: 1 });
     ring.alpha = 0.4;
-    var orb = add(eggCoreMesh, compose(pos[0], PAD_TOP + 0.8, pos[1], 0, 0, 0, 1.6, 1.6, 1.6), true, 'spawnorb');
+    var orb = add(spawnBubbleMesh, compose(pos[0], PAD_TOP + 0.8, pos[1], 0, 0, 0, 1.6, 1.6, 1.6), true, 'spawnorb');
     pendingSpawns.push({ kind: wave[i], x: pos[0], z: pos[1], t: 1.0, ring: ring, orb: orb });
   }
 }
@@ -1960,10 +1965,10 @@ function updatePendingSpawns(dt) {
     p.t -= dt;
     var frac = Math.max(0, 1 - p.t);
     var rs = 1.5 - frac * 0.6;
-    p.ring.mat = compose(p.x, PAD_TOP + 0.05, p.z, 0, 0, 0, rs, 1, rs);
+    p.ring.mat = compose(p.x, PAD_TOP + 0.05, p.z, 0, ambientTime * 0.9, 0, rs, 1, rs);
     p.ring.alpha = 0.3 + frac * 0.6;
     var os = 0.8 + frac * 1.8;
-    p.orb.mat = compose(p.x, PAD_TOP + 0.8, p.z, 0, ambientTime * 3, 0, os, os, os);
+    p.orb.mat = compose(p.x, PAD_TOP + 0.3 + frac * 0.5 + Math.sin(ambientTime * 7 + p.x) * 0.05, p.z, 0, ambientTime * 2, 0, os * 0.75, os * 0.75, os * 0.75); // bubbles rising
     p.orb.emiScale = 0.5 + frac * 1.2;
     p.orb.flash = frac * 0.4; p.orb.flashColor = [1, 0.55, 0.4];
     if (p.t <= 0) {
@@ -2092,10 +2097,11 @@ var ESHOT_SPEED = BALANCE.enemyShotSpeed, ESHOT_Y = SHOOTER_Y;
 var eshotMesh = mergeMesh([[SPHERE_MID, M(0, 0.1, 0, 0, 0, 0, 1, 1, 1), hex(0xff6a3d), [0.55, 0.16, 0.02]],
                            [SPHERE_LO, M(0, -0.25, 0, 0, 0, 0, 1.38, 0.55, 1.38), hex(0x5a1e2e)],
                            [SPHERE_LO, M(-0.32, 0.55, 0.3, 0, 0, 0, 0.22), hex(0xffd2a8), [0.4, 0.3, 0.2]]]);
-var etrailMesh = (function () { var b = new Builder(); b.add(SPHERE, compose(0,0,0,0,0,0,1,1,1), hex(0xffb347, 0.45), [0.7, 0.35, 0.05]); return b.upload(); })();
-var coralSparkMesh = (function () { var b = new Builder(); b.add(icosaTris(0.11, 0, srand), compose(0,0,0,0,0,0,1,1,1), hex(0xff8a70), [0.9, 0.35, 0.15]); return b.upload(); })();
+var etrailMesh = (function () { var b = new Builder(); b.add(SPHERE, compose(0,0,0,0,0,0,1,1,1), hex(0xffb347, 0.26), [0.5, 0.28, 0.05]); return b.upload(55); })();
+var coralSparkMesh = (function () { var b = new Builder(); b.add(icosaTris(0.11, 0, srand), compose(0,0,0,0,0,0,1,1,1), hex(0xfff0d8), [0.6, 0.5, 0.35]); return b.upload(); })();
 for (var ei = 0; ei < 96; ei++) {
   var ec = add(eshotMesh, compose(0,-20,0,0,0,0,0.001,0.001,0.001), false, 'eshot');
+  ec.castShadow = false; // berries fly high; their halo reads height, no shadow pass needed
   var et = add(etrailMesh, compose(0,-20,0,0,0,0,0.001,0.001,0.001), true, 'etrail', null, { additive: true, unlit: 1 });
   enemyShots.push({ core: ec, trail: et, active: false, x: 0, z: 0, vx: 0, vz: 0 });
 }
@@ -2836,6 +2842,7 @@ function finalizeKillShooter(shooter) {
   spawnSparkleBurst(shooter.x, SHOOTER_Y, shooter.z);
   GameAudio.pop();
   hideShooter(shooter);
+  spawnBonk(MESH.cache['perch'].body, shooter.x, SHOOTER_Y - 0.04, shooter.z, shooter.heading, 1, 'flop');
   dropPearls(shooter.x, shooter.z, BALANCE.pearlsPerShooter);
   maybeDropEgg(shooter.x, shooter.z, shooter.minion ? 0.85 : undefined);
 }
@@ -2890,9 +2897,9 @@ function updateShooter(dt) {
       continue;
     }
     var head = Math.atan2(p.vx, p.vz), tl = Math.hypot(p.vx, p.vz) || 1;
-    p.core.mat = compose(p.x, ESHOT_Y, p.z, 0, head, 0, 0.20, 0.20, 0.30);
+    p.core.mat = compose(p.x, ESHOT_Y, p.z, 0, head, 0, 0.24, 0.24, 0.24);
     p.core.emiScale = 1.2;
-    p.trail.mat = compose(p.x - (p.vx/tl)*0.3, ESHOT_Y, p.z - (p.vz/tl)*0.3, 0, head, 0, 0.15, 0.15, 0.6);
+    p.trail.mat = compose(p.x - (p.vx/tl)*0.1, ESHOT_Y, p.z - (p.vz/tl)*0.1, 0, head, 0, 0.32, 0.32, 0.4);
     p.trail.alpha = 0.5;
   }
   for (var j = 0; j < enemySparks.length; j++) {
@@ -3070,6 +3077,256 @@ function checkArenaCleared() {
 }
 
 // ---------- enemy: the Charger (chunky spiky crab, shake -> rush -> dizzy, no shots) ----------
+// ---------- Phase 5 critter kit: shared bits for the Snapjaw Crab, Puffle the Puffer and Old Grumblegill ----------
+// Each critter is a few merged meshes (cached once per kind); 'anim' parts get a cosmetic local pose that reads
+// the existing state timers only.
+var CRIT_INK = hex(0x2f2226), CRIT_WHITE = hex(0xfffaf2);
+function starTris() {   // flat five-point star in the XZ plane, radius 1
+  return gridTris(10, 1, function (u, v) { var a = u * 6.2832, r = v * ((Math.round(u * 10) % 2) ? 0.45 : 1); return [Math.cos(a) * r, 0, Math.sin(a) * r]; });
+}
+var dizzyStarsMesh = (function () {
+  var b = new Builder();
+  for (var i = 0; i < 3; i++) { var a = i / 3 * 6.2832; b.add(starTris(), M(Math.cos(a) * 0.5, Math.sin(i * 2.1) * 0.06, Math.sin(a) * 0.5, 0.25, a, 0, 0.16), hex(0xffe27a), [0.5, 0.42, 0.12]); }
+  return b.upload(false);
+})();
+function googlyEyes(pts, r, pr) {   // pts: [[x,y,z],...] eye centres; returns [whites pieces, pupils pieces]
+  var wh = [], pu = [];
+  pts.forEach(function (p) {
+    wh.push([SPHERE_MID, M(p[0], p[1], p[2], 0, 0, 0, r), CRIT_WHITE]);
+    pu.push([SPHERE_MID, M(p[0], p[1], p[2] + r * 0.9, 0, 0, 0, pr, pr * 1.08, pr * 0.55), hex(0x1d1a1c)]);
+    pu.push([SPHERE_LO, M(p[0] + pr * 0.35, p[1] + pr * 0.4, p[2] + r * 0.9 + pr * 0.5, 0, 0, 0, pr * 0.3), hex(0xffffff)]);
+  });
+  return [wh, pu];
+}
+function critterPart(list, mesh, local, tag, opts) {
+  opts = opts || {}; opts.dynamic = tag; opts.local = local;
+  var it = clayItem(mesh, local, opts); it.anim = opts.anim || null; it.base = local;
+  list.push(it); return it;
+}
+
+// Snapjaw Crab (the Charger): chunky red crab, eye-stalks, mischievous brows, big pincers.
+function crabModel() {
+  return MESH.get('crab', function () {
+    var red = hex(0xe5574a), redD = hex(0xc4443c), pale = hex(0xffc8ae), cheek = hex(0xff9a9a);
+    var paint = { paint: function (q) {
+      var c = mixc(redD, red, sstep(-0.1, 0.35, q[1]));
+      if (q[1] < -0.02) c = mixc(c, pale, sstep(-0.02, -0.25, q[1]));
+      for (var s = -1; s <= 1; s += 2) c = mixc(c, cheek, sstep(0.17, 0.06, Math.hypot(q[0] - s * 0.5, q[1] - 0.05, (q[2] - 0.62) * 0.8)));
+      return c;
+    } };
+    var shell = blobTris(32, 20, function (x, y, z) { return [x, y * (y > 0 ? 0.62 : 0.42), z * 0.8]; });
+    var body = [[shell, null, paint]];
+    body.push([torusArcTris(0.14, 0.026, 3.75, 5.65, 12, 5), M(0, 0.06, 0.79, -0.3), CRIT_INK]);                 // cheeky grin
+    [[0, 0.5, -0.1, 0.17], [-0.36, 0.42, -0.28, 0.12], [0.36, 0.42, -0.28, 0.12], [-0.56, 0.3, 0.12, 0.1], [0.56, 0.3, 0.12, 0.1]].forEach(function (b) {
+      body.push([SPHERE_LO, M(b[0], b[1], b[2], 0, 0, 0, b[3], b[3] * 0.55, b[3]), pale]);                        // shell bumps
+    });
+    var eyePts = [];
+    [-1, 1].forEach(function (s) {
+      body.push([tubeTris([[s * 0.2, 0.4, 0.42], [s * 0.25, 0.72, 0.48], [s * 0.3, 0.92, 0.5]], function () { return 0.055; }, 6), null, redD]);
+      body.push([tubeTris([[s * 0.47, 1.27, 0.58], [s * 0.31, 1.25, 0.66], [s * 0.15, 1.17, 0.63]], function () { return 0.032; }, 6), null, CRIT_INK]);
+      eyePts.push([s * 0.3, 1.05, 0.52]);
+    });
+    var ge = googlyEyes(eyePts, 0.17, 0.08);
+    body = body.concat(ge[0]);
+    var legs = [];
+    [-1, 1].forEach(function (s) {
+      for (var l = 0; l < 3; l++) {
+        var lz = 0.22 - l * 0.34;
+        legs.push([tubeTris([[s * 0.72, -0.05, lz], [s * 1.12, 0.08, lz - 0.05], [s * 1.28, -0.5, lz - 0.12]], function (t) { return 0.08 - t * 0.035; }, 6), null, redD]);
+      }
+    });
+    function claw(s) {
+      return mergeMesh([
+        [tubeTris([[0, 0, 0], [s * 0.28, 0.08, 0.32], [s * 0.34, 0.12, 0.55]], function () { return 0.09; }, 7), null, redD],
+        [blobTris(16, 10), M(s * 0.38, 0.17, 0.82, 0, 0, 0, 0.3, 0.25, 0.34), red],
+        [blobTris(14, 8), M(s * 0.32, 0.3, 1.14, -0.15, s * 0.15, 0, 0.13, 0.1, 0.3), red],
+        [blobTris(12, 8), M(s * 0.44, 0.07, 1.08, 0.15, s * 0.1, 0, 0.1, 0.08, 0.24), redD],
+        [SPHERE_LO, M(s * 0.3, 0.36, 1.32, 0, 0, 0, 0.05), pale]
+      ], 60);
+    }
+    return { body: mergeMesh(body, 60), pupils: mergeMesh(ge[1], false), legs: mergeMesh(legs, 60), clawL: claw(-1), clawR: claw(1),
+      bonk: mergeMesh(body.concat(legs), 60) };
+  });
+}
+function crabPartLocal(it, c) {
+  var t = c.bob, st = c.state;
+  if (it.anim === 'clawL' || it.anim === 'clawR') {
+    var s = it.anim === 'clawL' ? -1 : 1, rx = Math.sin(t * 1.3 + s) * 0.06, rz = 0;
+    if (st === 'shake') { rx = -0.95 + Math.sin(t * 34 + s) * 0.16; rz = -s * 0.25; }        // claws up, clacking
+    else if (st === 'rush') { rx = -0.25 + Math.sin(t * 22 + s * 1.5) * 0.22; }               // snapping forward
+    else if (st === 'dizzy') { rx = 0.35; rz = s * 0.2 + Math.sin(t * 2.2) * 0.12; }          // droopy
+    return mul(it.base, M(0, 0, 0, rx, 0, rz));
+  }
+  if (it.anim === 'legs') {
+    var stamp = st === 'shake' ? Math.abs(Math.sin(t * 20)) * 0.06 : (st === 'rush' ? Math.abs(Math.sin(t * 16)) * 0.08 : Math.abs(Math.sin(t * 2.5)) * 0.03);
+    return mul(it.base, M(0, stamp, 0, 0, 0, st === 'rush' ? Math.sin(t * 16) * 0.1 : 0));
+  }
+  if (it.anim === 'stars') {
+    var on = st === 'dizzy' ? 1 : 0.001;
+    return mul(it.base, M(0, 0, 0, 0, t * 4, 0, on, on, on));
+  }
+  return it.local;
+}
+
+// Puffle the Puffer (the Spreader): peach balloon fish; spikes pop out as it inflates.
+function pufferModel() {
+  return MESH.get('puffer', function () {
+    var peach = hex(0xf4a46b), peachD = hex(0xe0884f), belly = hex(0xffe3c8), cheek = hex(0xff9aa8), spikeC = hex(0xc9704a), finC = hex(0xf08a5a);
+    var paint = { paint: function (q) {
+      var c = mixc(peachD, peach, sstep(-0.2, 0.6, q[1]));
+      c = mixc(c, belly, sstep(-0.05, -0.55, q[1]) * sstep(-0.4, 0.3, q[2]));
+      for (var s = -1; s <= 1; s += 2) c = mixc(c, cheek, sstep(0.19, 0.08, Math.hypot(q[0] - s * 0.52, q[1] + 0.05, (q[2] - 0.7) * 0.8)));
+      if (Math.sin(q[0] * 13) * Math.sin(q[2] * 11) * Math.sin(q[1] * 9) > 0.55 && q[1] > 0.1) c = mixc(c, peachD, 0.6);    // freckles
+      return c;
+    } };
+    var body = [[blobTris(32, 22, function (x, y, z) { return [x * 0.95, y * 0.9, z * 0.95 + (z > 0 ? 0.04 : 0)]; }), null, paint]];
+    body.push([torusArcTris(0.07, 0.03, 0, 6.2832, 12, 6), M(0, -0.12, 0.93), hex(0xc0505a)]);                       // little "o" mouth
+    body.push([SPHERE_LO, M(0, 0.86, -0.15, -0.3, 0, 0, 0.06, 0.2, 0.22), finC]);                                     // top fin
+    var eyePts = [[-0.35, 0.28, 0.74], [0.35, 0.28, 0.74]];
+    var ge = googlyEyes(eyePts, 0.2, 0.1);
+    body = body.concat(ge[0]);
+    [-1, 1].forEach(function (s) { body.push([tubeTris([[s * 0.5, 0.56, 0.72], [s * 0.36, 0.6, 0.8], [s * 0.2, 0.55, 0.82]], function () { return 0.028; }, 6), null, CRIT_INK]); });
+    var spikes = [], N = 18;
+    for (var i = 0; i < N; i++) {             // spikes on a sphere (golden spiral), base just under the skin
+      var y = 0.9 - (i + 0.5) / N * 1.5, r = Math.sqrt(Math.max(0, 1 - y * y)), a = i * 2.39996;
+      var n = [Math.cos(a) * r, y, Math.sin(a) * r];
+      if (n[2] > 0.55 && Math.abs(n[1]) < 0.55) continue;       // keep the face clear
+      spikes.push([coneTris(1, 1, 6), basisMat([n[0] * 0.86, n[1] * 0.86, n[2] * 0.86], n, 0.07, 0.07, 0.34), spikeC]);
+    }
+    // cones point along +Y in coneTris; re-aim them along the normal
+    spikes = spikes.map(function (p) { return [p[0], mul(p[1], M(0, 0, 0.5, Math.PI / 2, 0, 0)), p[2]]; });
+    var fins = [], tail = [];
+    [-1, 1].forEach(function (s) { fins.push([blobTris(10, 8), M(s * 0.95, -0.05, 0.05, 0, s * 0.4, s * 0.5, 0.06, 0.2, 0.18), finC]); });
+    tail.push([blobTris(12, 8, function (x, y, z) { return [x * 0.05, y * (0.28 + Math.abs(z) * 0.12), z * 0.26]; }), M(0, 0, -0.22), finC]);
+    return { body: mergeMesh(body, 60), pupils: mergeMesh(ge[1], false), spikes: mergeMesh(spikes, false), fins: mergeMesh(fins, 60), tail: mergeMesh(tail, 60),
+      bonk: mergeMesh(body, 60) };
+  });
+}
+function pufferPartLocal(it, p) {
+  var t = p.bob, sw = p.swell || 0;
+  if (it.anim === 'spikes') { var k = 0.8 + Math.min(1, sw * 1.6) * 0.26; return mul(it.base, M(0, 0, 0, 0, 0, 0, k, k, k)); }
+  if (it.anim === 'fins') return mul(it.base, M(0, 0, 0, 0, 0, 0, 1, 1 + Math.sin(t * 9) * 0.25, 1));
+  if (it.anim === 'tail') return mul(it.base, M(0, 0, 0, 0, Math.sin(t * 4.5) * 0.4, 0));
+  return it.local;
+}
+
+// Old Grumblegill (the Great Pike): slate-blue pike with an underbite and a reed crown; five body
+// segments swim on a travelling wave. Unit-sized model, scaled by BOSS_SCALE in updateBoss.
+function grumblegillModel() {
+  return MESH.get('grumblegill', function () {
+    var slate = hex(0x5f8fb0), slateD = hex(0x4a7398), belly = hex(0xe2ecf2), spot = hex(0x8fb6cf), finC = hex(0x7aa0c0), cheek = hex(0xf2a0b4);
+    function segPaint(q) { var c = mixc(belly, slate, sstep(-0.2, 0.12, q[1])); c = mixc(c, slateD, sstep(0.25, 0.5, q[1])); if (Math.sin(q[0] * 14 + q[2] * 9) * Math.sin(q[2] * 12) > 0.6 && q[1] > 0.0) c = mixc(c, spot, 0.7); return c; }
+    var head = [[blobTris(30, 20, function (x, y, z) { var k = z > 0 ? 1 - z * 0.25 : 1; return [x * 0.6 * k, y * 0.5 * k, z * 0.75]; }), M(0, 0, 1.0), { paint: function (q) { return segPaint(q); } }]];
+    var eyePts = [[-0.3, 0.2, 1.28], [0.3, 0.2, 1.28]];
+    var ge = googlyEyes(eyePts, 0.15, 0.075);
+    head = head.concat(ge[0]);
+    [-1, 1].forEach(function (s) {
+      head.push([tubeTris([[s * 0.44, 0.38, 1.3], [s * 0.3, 0.33, 1.4], [s * 0.14, 0.3, 1.4]], function () { return 0.04; }, 6), null, CRIT_INK]);   // heavy grumpy brows
+      head.push([SPHERE_LO, M(s * 0.42, -0.05, 1.3, 0, 0, 0, 0.12, 0.08, 0.06), cheek]);
+    });
+    // reed crown: blades and two little cattails ringed on the head
+    for (var r = 0; r < 9; r++) {
+      var a = r / 9 * 6.2832, cx = Math.cos(a) * 0.18, cz = 0.95 + Math.sin(a) * 0.22, h = 0.3 + (r % 3) * 0.08;
+      head.push([coneTris(1, 1, 4), M(cx, 0.48 + h * 0.5, cz, Math.sin(a) * 0.25, a, -Math.cos(a) * 0.25, 0.035, h, 0.02), hex(r % 2 ? 0x7cbf5a : 0x6aa84f)]);
+    }
+    [[-0.1, 0.95], [0.12, 1.05]].forEach(function (c) {
+      head.push([CYL, M(c[0], 0.75, c[1], 0, 0, 0, 0.018, 0.5, 0.018), hex(0x5f9e4a)]);
+      head.push([SPHERE_LO, M(c[0], 0.98, c[1], 0, 0, 0, 0.05, 0.13, 0.05), hex(0x8a5a3a)]);
+    });
+    // underbite jaw (pivot at the hinge) with upward teeth
+    var jaw = [[blobTris(20, 12, function (x, y, z) { return [x * 0.42, y * 0.16, z * 0.62]; }), M(0, 0, 0.5), { paint: function (q) { return mixc(belly, slate, sstep(0.0, 0.15, q[1])); } }]];
+    for (var ti = -2; ti <= 2; ti++) jaw.push([coneTris(1, 1, 5), M(ti * 0.1, 0.16, 0.95 - Math.abs(ti) * 0.08, 0, 0, 0, 0.035 + (Math.abs(ti) === 1 ? 0.015 : 0), 0.14 + (Math.abs(ti) === 1 ? 0.06 : 0), 0.035), CRIT_WHITE]);
+    var segs = [];
+    [[0.45, 0.62, 0.48], [-0.1, 0.56, 0.44], [-0.62, 0.46, 0.36], [-1.08, 0.34, 0.27]].forEach(function (s) {
+      segs.push(mergeMesh([[blobTris(24, 16, function (x, y, z) { return [x, y * 0.85, z]; }), M(0, 0, 0, 0, 0, 0, s[1], s[2], 0.48), { paint: function (q) { return segPaint([q[0], q[1] * 0.85, q[2]]); } }],
+                           [SPHERE_LO, M(0, s[2] * 0.9, 0, -0.2, 0, 0, 0.04, s[2] * 0.4, 0.28), finC]], 60));
+    });
+    var tail = mergeMesh([[blobTris(16, 10, function (x, y, z) { return [x * 0.05, y * (0.22 + Math.max(0, -z) * 0.3), z * 0.32]; }), M(0, 0, -0.28), finC]], 60);
+    var fins = mergeMesh([[blobTris(12, 8), M(-0.58, -0.16, 0.7, 0, -0.5, -1.0, 0.05, 0.17, 0.22), finC], [blobTris(12, 8), M(0.58, -0.16, 0.7, 0, 0.5, 1.0, 0.05, 0.17, 0.22), finC]], 60);
+    return { head: mergeMesh(head, 60), pupils: mergeMesh(ge[1], false), jaw: mergeMesh(jaw, 60), segs: segs, segZ: [0.45, -0.1, -0.62, -1.08], tail: tail, fins: fins };
+  });
+}
+function bossPartLocal(part) {
+  var t = boss.bob, k = part.seg;
+  if (part.anim === 'seg') {
+    var w = Math.sin(t * 2.6 - k * 0.9), sway = w * 0.05 * (k + 1), yaw = Math.cos(t * 2.6 - k * 0.9) * 0.08 * (k + 1);
+    return mul(M(sway, 0, 0, 0, yaw, 0), part.item.base);
+  }
+  if (part.anim === 'fins') { var fl = 1 + boss.warnT * 0.6 + Math.sin(t * 5) * 0.08; return mul(part.item.base, mul(M(0, 0, 0.7, 0, 0, 0, fl, fl, 1), M(0, 0, -0.7))); }
+  return part.item.local;
+}
+
+// Bonk: a beaten critter goes dizzy for a moment, then tumbles away into the pond (cosmetic actor).
+var bonks = [];
+function spawnBonk(mesh, x, y, z, heading, scale, style) {
+  var b = null;
+  for (var i = 0; i < bonks.length; i++) if (bonks[i].t >= 1) { b = bonks[i]; break; }
+  if (!b) {
+    b = { item: add(mesh, HIDDEN_M, false, 'bonk', null, {}), stars: clayItem(dizzyStarsMesh, HIDDEN_M, { castShadow: false, unlit: 1 }), t: 1 };
+    b.item.castShadow = false; bonks.push(b);
+  }
+  b.item.mesh = mesh; b.t = 0; b.x = x; b.y = y; b.z = z; b.h = heading; b.s = scale || 1; b.style = style || 'flop'; b.splashed = false;
+  var a = Math.atan2(x, z); b.ox = Math.sin(a); b.oz = Math.cos(a);
+  if (Math.hypot(x, z) < 0.5) { b.ox = Math.sin(heading + Math.PI); b.oz = Math.cos(heading + Math.PI); }
+}
+function updateBonks(dt) {
+  for (var i = 0; i < bonks.length; i++) {
+    var b = bonks[i];
+    if (b.t >= 1) { b.item.mat = HIDDEN_M; b.stars.mat = HIDDEN_M; continue; }
+    b.t = Math.min(1, b.t + dt / 1.05);
+    var p = b.t, s = b.s;
+    if (p < 0.32) {
+      var k = p / 0.32, wob = Math.sin(p * 46) * 0.22 * (1 - k);
+      b.item.mat = M(b.x, b.y - 0.08 * k, b.z, wob, b.h, -wob, s * (1 + 0.12 * (1 - k)), s * (1 - 0.15 * k), s * (1 + 0.12 * (1 - k)));
+      b.stars.mat = M(b.x, b.y + 0.95 * s, b.z, 0, ambientTime * 5, 0, s, s, s);
+    } else {
+      var q = (p - 0.32) / 0.68, dist = 3.4 * q;
+      var x = b.x + b.ox * dist, z = b.z + b.oz * dist, y = b.y + Math.sin(q * Math.PI) * 1.5 * s - q * q * 1.6;
+      if (b.style === 'zip') { x += Math.sin(q * 30) * 0.3 * (1 - q); y = b.y + q * 2.2; }
+      var roll = b.style === 'zip' ? 0 : q * Math.PI, spin = b.style === 'zip' ? q * 14 : q * 2;
+      b.item.mat = M(x, y, z, 0, b.h + spin, roll, s * (1 - q * 0.45), s * (1 - q * 0.45) * (b.style === 'zip' ? 1 - q * 0.5 : 1), s * (1 - q * 0.45));
+      b.stars.mat = q < 0.4 ? M(x, y + 0.9 * s, z, 0, ambientTime * 5, 0, s * (1 - q * 2), s, s * (1 - q * 2)) : HIDDEN_M;
+      if (!b.splashed && q > 0.92) { b.splashed = true; if (Math.hypot(x, z) > PAD_R) addWaterRipple(x, z, 0.9); }
+    }
+    if (b.t >= 1) { b.item.mat = HIDDEN_M; b.stars.mat = HIDDEN_M; }
+  }
+}
+
+// Spawn telegraph: an amber dashed ring on the pad and a cluster of bubbles where a critter will pop up.
+var spawnRingMesh = (function () {
+  var b = new Builder(), N = 16;
+  for (var i = 0; i < N; i++) {
+    var a1 = (i + 0.15) / N * 6.2832, a2 = (i + 0.75) / N * 6.2832, rIn = 0.64, rOut = 0.74;
+    for (var k = 0; k < 3; k++) {
+      var u1 = a1 + (a2 - a1) * k / 3, u2 = a1 + (a2 - a1) * (k + 1) / 3;
+      b.quad([Math.cos(u1) * rIn, 0, Math.sin(u1) * rIn], [Math.cos(u2) * rIn, 0, Math.sin(u2) * rIn], [Math.cos(u2) * rOut, 0, Math.sin(u2) * rOut], [Math.cos(u1) * rOut, 0, Math.sin(u1) * rOut], [1.0, 0.72, 0.3, 0.9]);
+    }
+  }
+  return b.upload(false);
+})();
+var spawnBubbleMesh = (function () {
+  var b = new Builder();
+  [[0, 0, 0, 0.11], [0.09, -0.08, 0.05, 0.07], [-0.08, -0.12, -0.03, 0.06], [0.03, -0.2, -0.07, 0.05], [-0.05, 0.1, 0.06, 0.05]].forEach(function (s) {
+    b.add(SPHERE_MID, M(s[0], s[1], s[2], 0, 0, 0, s[3]), [0.88, 0.98, 1.0, 0.75], [0.15, 0.2, 0.22]);
+  });
+  return b.upload(55);
+})();
+
+// Hitbox overlay (debug): window.__phHitboxes = true draws each hit radius as a thin ring.
+var hitboxRingMesh = ringMesh(0.9, 1.0, [1, 0.1, 0.55, 0.95], 40), hitboxItems = [];
+function updateHitboxOverlay() {
+  var list = [];
+  if (window.__phHitboxes) {
+    list.push([frog.x, frog.z, FROG_HIT_R]);
+    shooters.forEach(function (e) { if (e.active) list.push([e.x, e.z, SHOOTER_R]); });
+    chargers.forEach(function (e) { if (e.active) list.push([e.x, e.z, CHARGER_R]); });
+    spreaders.forEach(function (e) { if (e.active) list.push([e.x, e.z, SPREADER_R]); });
+    if (boss.active) list.push([boss.x, boss.z, BOSS_R]);
+  }
+  while (hitboxItems.length < list.length) { var it = add(hitboxRingMesh, HIDDEN_M, true, 'hitbox', null, { unlit: 1 }); it.castShadow = false; hitboxItems.push(it); }
+  for (var i = 0; i < hitboxItems.length; i++) hitboxItems[i].mat = i < list.length ? M(list[i][0], PAD_TOP + 0.06, list[i][1], 0, 0, 0, list[i][2], 1, list[i][2]) : HIDDEN_M;
+}
+
 var chargers = [];
 function makeCharger(x, z) {
   var e = { kind: 'charger', active: true, x: x, z: z, heading: Math.atan2((frog ? frog.x : 0) - x, (frog ? frog.z : 0) - z),
@@ -3090,25 +3347,13 @@ function chargerPart(tris, x, y, z, color, scl, rot, emi) {
   return it;
 }
 function buildChargerBody(charger) {
-  var shell = hex(0xe8544a), shellDark = hex(0xb93a3a), shellPale = hex(0xff9a86), spikeC = hex(0x7c2d33);
-  // Wide domed chunky shell — reads crab/beetle, nothing like the fish.
-  chargerPart(SPHERE, 0, 0, 0, shell, [1.0, 0.62, 0.85], null);                    // shell dome
-  chargerPart(SPHERE, 0, -0.18, 0.10, shellPale, [0.78, 0.42, 0.62], null);       // underside
-  chargerPart(SPHERE, 0, 0.28, 0.55, shellDark, [0.55, 0.38, 0.42], null);        // head plate
-  // Back spikes in rows.
-  [[0,0.62,-0.45,0.30],[-0.4,0.52,-0.15,0.24],[0.4,0.52,-0.15,0.24],[0,0.58,0.12,0.26],[-0.55,0.38,-0.5,0.2],[0.55,0.38,-0.5,0.2]].forEach(function (sp) {
-    chargerPart(CONE, sp[0], sp[1], sp[2], spikeC, [sp[3]*0.6, sp[3]*2.0, sp[3]*0.6], [-0.35, 0, 0]);
-  });
-  [-1, 1].forEach(function (s) {
-    // Big front claw, smaller walking legs, stalked glowing eye.
-    chargerPart(SPHERE, s*0.95, -0.05, 0.55, shellDark, [0.30, 0.26, 0.38], null);        // claw base
-    chargerPart(CONE, s*1.05, 0.02, 0.85, spikeC, [0.16, 0.5, 0.16], [Math.PI/2.3, 0, s*0.2]); // claw pincer
-    chargerPart(CYL, s*0.95, -0.35, 0.05, shellDark, [0.09, 0.6, 0.09], [0, 0, s*0.7]);    // leg front
-    chargerPart(CYL, s*1.0, -0.35, -0.4, shellDark, [0.09, 0.6, 0.09], [0.2, 0, s*0.8]);   // leg back
-    chargerPart(CYL, s*0.28, 0.55, 0.55, shellDark, [0.06, 0.35, 0.06], [0, 0, s*0.25]);   // eye stalk
-    var ceye = chargerPart(SPHERE, s*0.33, 0.78, 0.60, hex(0xffe14d), [0.13, 0.13, 0.10], null, [1.0, 0.85, 0.15]);
-    charger.eyeItems.push(ceye);
-  });
+  var K = crabModel(), L = charger.parts;
+  critterPart(L, K.body, M(), 'charger', { aoGround: PAD_TOP });
+  critterPart(L, K.pupils, M(), 'charger', { material: MAT.gloss, castShadow: false });
+  critterPart(L, K.legs, M(), 'charger', { anim: 'legs' });
+  critterPart(L, K.clawL, M(-0.8, 0.05, 0.45), 'charger', { anim: 'clawL' });
+  critterPart(L, K.clawR, M(0.8, 0.05, 0.45), 'charger', { anim: 'clawR' });
+  critterPart(L, dizzyStarsMesh, M(0, 1.45, 0.3), 'charger', { anim: 'stars', unlit: 1, castShadow: false });
   charger.shadow = add(makeBlobShadowMesh(), compose(charger.x, PAD_TOP + 0.02, charger.z, 0, 0, 0, 1.2, 1, 1.1),
     true, 'chargerShadow', null, { unlit: 1 });
 }
@@ -3127,6 +3372,7 @@ function finalizeKillCharger(charger) {
   spawnSparkleBurst(charger.x, CHARGER_Y, charger.z);
   GameAudio.chargerPop();
   hideCharger(charger);
+  spawnBonk(crabModel().bonk, charger.x, CHARGER_Y, charger.z, charger.heading, 1, 'flop');
   dropPearls(charger.x, charger.z, BALANCE.pearlsPerCharger);
   maybeDropEgg(charger.x, charger.z, charger.minion ? 0.85 : undefined);
 }
@@ -3192,7 +3438,7 @@ function updateOneCharger(charger, dt) {
   var cm = compose(charger.x + jx, CHARGER_Y + shy, charger.z + jz, dizzyWob, charger.heading, dizzyWob * 0.7, 1, 1, 1);
   for (var q = 0; q < charger.parts.length; q++) {
     var it = charger.parts[q];
-    it.mat = mul(cm, it.local);
+    it.mat = mul(cm, it.anim ? crabPartLocal(it, charger) : it.local);
     it.emiScale = 1 + shake * 0.5;
     it.flash = charger.hitT;
     it.flashColor = charger.hitT > 0.02 ? [1,1,1] : [1,0.85,0.7];
@@ -3224,23 +3470,12 @@ function spreaderPart(tris, x, y, z, color, scl, rot, emi) {
   return it;
 }
 function buildSpreaderBody(spreader) {
-  var puff = hex(0xff7a5c), puffDark = hex(0xd94f43), puffPale = hex(0xffc9a3), spurC = hex(0x8c3438);
-  // Near-spherical puffed body — round where the Shooter is sleek and the Charger is flat/wide.
-  spreaderPart(SPHERE, 0, 0, 0, puff, [0.95, 0.90, 0.95], null);                    // round body
-  spreaderPart(SPHERE, 0, -0.28, 0.28, puffPale, [0.62, 0.50, 0.62], null);       // pale belly
-  spreaderPart(SPHERE, 0, -0.05, 0.88, puffPale, [0.30, 0.22, 0.20], null);       // little beak/mouth
-  spreaderPart(CONE, 0, 0.05, -0.95, puffDark, [0.30, 0.5, 0.10], [0, 0, 0]);     // tail nub
-  // Short spurs scattered over the upper body.
-  [[0,0.85,-0.2],[-0.5,0.65,0.2],[0.5,0.65,0.2],[-0.65,0.35,-0.4],[0.65,0.35,-0.4],[0,0.7,0.5],[-0.35,0.8,-0.55],[0.35,0.8,-0.55]].forEach(function (sp) {
-    spreaderPart(CONE, sp[0], sp[1], sp[2], spurC, [0.09, 0.30, 0.09], [sp[2]*0.6, 0, -sp[0]*0.6]);
-  });
-  [-1, 1].forEach(function (s) {
-    spreaderPart(CONE, s*0.92, -0.05, 0.05, puffDark, [0.30, 0.45, 0.09], [0.3, 0, s*1.2]); // side fin
-    spreaderPart(SPHERE, s*0.38, 0.42, 0.72, hex(0x2a0f0c), [0.16, 0.16, 0.14], null);       // socket
-    var eye = spreaderPart(SPHERE, s*0.38, 0.44, 0.84, hex(0xffe14d), [0.10, 0.10, 0.05], null, [1.0, 0.85, 0.15]);
-    spreader.eyeItems.push(eye);
-    spreaderPart(SPHERE, s*0.55, 0.15, 0.55, puffDark, [0.16, 0.12, 0.16], null);   // cheek spot
-  });
+  var K = pufferModel(), L = spreader.parts;
+  critterPart(L, K.body, M(), 'spreader');
+  critterPart(L, K.pupils, M(), 'spreader', { material: MAT.gloss, castShadow: false });
+  critterPart(L, K.spikes, M(), 'spreader', { anim: 'spikes' });
+  critterPart(L, K.fins, M(), 'spreader', { anim: 'fins' });
+  critterPart(L, K.tail, M(0, 0, -0.9), 'spreader', { anim: 'tail' });
   spreader.shadow = add(makeBlobShadowMesh(), compose(spreader.x, PAD_TOP + 0.02, spreader.z, 0, 0, 0, 1.15, 1, 1.15),
     true, 'spreaderShadow', null, { unlit: 1 });
 }
@@ -3259,6 +3494,7 @@ function finalizeKillSpreader(spreader) {
   spawnSparkleBurst(spreader.x, SPREADER_Y, spreader.z);
   GameAudio.spreaderPop();
   hideSpreader(spreader);
+  spawnBonk(pufferModel().bonk, spreader.x, SPREADER_Y, spreader.z, spreader.heading, 1, 'zip');
   dropPearls(spreader.x, spreader.z, BALANCE.pearlsPerSpreader);
   maybeDropEgg(spreader.x, spreader.z, spreader.minion ? 0.85 : undefined);
 }
@@ -3347,7 +3583,7 @@ function updateOneSpreader(spreader, dt) {
   var sm = compose(spreader.x, SPREADER_Y + bobY, spreader.z, 0, spreader.heading, 0, sc, sc, sc);
   for (var q = 0; q < spreader.parts.length; q++) {
     var it = spreader.parts[q];
-    it.mat = mul(sm, it.local);
+    it.mat = mul(sm, it.anim ? pufferPartLocal(it, spreader) : it.local);
     it.emiScale = 1 + spreader.swell * 0.6;
     it.flash = spreader.hitT;
     it.flashColor = spreader.hitT > 0.02 ? [1,1,1] : [1,0.88,0.72];
@@ -3382,34 +3618,20 @@ function bossPart(tris, x, y, z, color, scl, rot, emi) {
 }
 function buildBoss() {
   if (boss.parts.length) return; // built once; reused across retries
-  var coral = hex(0xff6b57), coralDark = hex(0xc73e33), pale = hex(0xffa08a), armor = hex(0x8c3438), bone = hex(0xfff2d8);
-  bossPart(SPHERE, 0, 0, -0.15, coral, [0.78, 0.62, 1.30], null);                       // huge body
-  bossPart(SPHERE, 0, -0.16, 0.25, pale, [0.52, 0.40, 0.85], null);                    // underside
-  bossPart(SPHERE, 0, 0.05, 1.05, coral, [0.66, 0.55, 0.62], null);                    // head
-  bossPart(CONE, 0, 0.02, 1.62, coral, [0.44, 0.62, 0.44], [Math.PI/2, 0, 0]);         // snout
-  // Big jaw: lower jaw part opens for the aimed burst warning.
-  boss.jaw = bossPart(SPHERE, 0, -0.32, 1.25, coralDark, [0.52, 0.18, 0.62], null);
-  // Teeth: bone cones down from the upper jaw, up from the lower jaw.
-  for (var ti = -2; ti <= 2; ti++) {
-    bossPart(CONE, ti * 0.17, -0.18, 1.78 - Math.abs(ti) * 0.05, bone, [0.055, 0.22, 0.055], [Math.PI, 0, 0]);
-    if (ti > -2 && ti < 2) bossPart(CONE, ti * 0.17 + 0.08, -0.38, 1.70 - Math.abs(ti) * 0.05, bone, [0.045, 0.16, 0.045], [0, 0, 0]);
+  var K = grumblegillModel();
+  function bp(mesh, local, opts) {
+    opts = opts || {};
+    var it = clayItem(mesh, local, { dynamic: 'boss', local: local, material: opts.material, castShadow: opts.castShadow });
+    it.base = local;
+    var d = { item: it, x: 0, y: 0, z: 0, scl: [1, 1, 1], rot: [0, 0, 0], anim: opts.anim || null, seg: opts.seg || 0 };
+    boss.parts.push(d); return d;
   }
-  // Armour plates and dorsal spikes along the back.
-  [[0,0.58,0.45,0.62],[0,0.66,0.0,0.70],[0,0.62,-0.5,0.64],[0,0.5,-0.95,0.52]].forEach(function (pl) {
-    bossPart(SPHERE, pl[0], pl[1], pl[2], armor, [pl[3], 0.22, pl[3] * 0.8], null);
-  });
-  [[0,0.85,0.25],[-0.3,0.75,-0.3],[0.3,0.75,-0.3],[0,0.8,-0.75]].forEach(function (sp) {
-    bossPart(CONE, sp[0], sp[1], sp[2], armor, [0.14, 0.5, 0.14], [-0.4, 0, 0]);
-  });
-  bossPart(CONE, 0, 0.1, -1.55, coralDark, [0.62, 0.85, 0.14], [0, 0, 0]);             // tail fan
-  bossPart(CONE, 0, 0.55, -1.3, coralDark, [0.4, 0.55, 0.12], [0.5, 0, 0]);            // tail lobe
-  [-1, 1].forEach(function (s) {
-    bossPart(CONE, s*0.78, -0.1, 0.3, coralDark, [0.5, 0.65, 0.11], [0.4, 0, s*1.15]); // side fin
-    bossPart(SPHERE, s*0.42, 0.28, 1.05, hex(0x2a0f0c), [0.20, 0.20, 0.18], null);     // socket
-    var eye = bossPart(SPHERE, s*0.42, 0.30, 1.16, hex(0xffe14d), [0.13, 0.13, 0.07], null, [1.0, 0.85, 0.15]);
-    boss.eyeItems.push(eye.item);                                                        // glowing yellow eye
-    bossPart(SPHERE, s*0.55, 0.35, 0.45, armor, [0.30, 0.34, 0.12], [0, s*0.4, 0]);     // gill plate
-  });
+  bp(K.head, M());
+  bp(K.pupils, M(), { material: MAT.gloss, castShadow: false });
+  var jd = bp(K.jaw, M(0, -0.15, 0.75)); jd.x = 0; jd.y = -0.15; jd.z = 0.75; boss.jaw = jd;
+  K.segs.forEach(function (m, i) { bp(m, M(0, 0, K.segZ[i]), { anim: 'seg', seg: i + 1 }); });
+  bp(K.tail, M(0, 0, -1.42), { anim: 'seg', seg: 5 });
+  bp(K.fins, M(), { anim: 'fins' });
   boss.shadow = add(makeBlobShadowMesh(), compose(0,-30,0,0,0,0,0.001,1,0.001), true, 'bossShadow', null, { unlit: 1 });
   hideBoss();
 }
@@ -3424,7 +3646,7 @@ function bossDarken(on) {
     boss.savedBg = arenaBg.slice();
     boss.savedTint = waterItem ? waterItem.tint.slice() : null;
     arenaBg = [arenaBg[0] * 0.4, arenaBg[1] * 0.45, arenaBg[2] * 0.5];
-    if (waterItem) waterItem.tint = [waterItem.tint[0] * 0.55, waterItem.tint[1] * 0.6, waterItem.tint[2] * 0.65];
+    if (waterItem) waterItem.tint = [waterItem.tint[0] * 0.86, waterItem.tint[1] * 0.88, waterItem.tint[2] * 0.92];
   } else if (boss.savedBg) {
     arenaBg = boss.savedBg; boss.savedBg = null;
     if (waterItem && boss.savedTint) waterItem.tint = boss.savedTint;
@@ -3575,8 +3797,8 @@ function updateBoss(dt) {
           GameAudio.bossCall();
           for (var mi = 0; mi < cnt; mi++) {
             var pos = pickSpawnPos();
-            var ring = add(eggRingMesh, compose(pos[0], PAD_TOP + 0.05, pos[1], 0, 0, 0, 1.4, 1, 1.4), true, 'spawnring', null, { additive: true, unlit: 1 });
-            var orb = add(eggCoreMesh, compose(pos[0], PAD_TOP + 0.8, pos[1], 0, 0, 0, 1.6, 1.6, 1.6), true, 'spawnorb');
+            var ring = add(spawnRingMesh, compose(pos[0], PAD_TOP + 0.05, pos[1], 0, 0, 0, 1.4, 1, 1.4), true, 'spawnring', null, { unlit: 1 });
+            var orb = add(spawnBubbleMesh, compose(pos[0], PAD_TOP + 0.8, pos[1], 0, 0, 0, 1.6, 1.6, 1.6), true, 'spawnorb');
             pendingSpawns.push({ kind: kinds[(Math.random() * 3) | 0], x: pos[0], z: pos[1], t: 1.0, ring: ring, orb: orb, minion: true });
           }
           boss.attackT = 0.5; // brief call, then back to idle via common timer below
@@ -3625,11 +3847,12 @@ function updateBoss(dt) {
   var curY = boss.entering ? boss.y : BOSS_Y + bobY;
   var jx = boss.shakeT > 0 ? (Math.random() * 2 - 1) * 0.10 * boss.shakeT : 0;
   var jz = boss.shakeT > 0 ? (Math.random() * 2 - 1) * 0.10 * boss.shakeT : 0;
-  var bm = compose(boss.x + jx, curY, boss.z + jz, 0, boss.heading + Math.sin(boss.bob) * 0.05, 0, BOSS_SCALE, BOSS_SCALE, BOSS_SCALE);
+  var bellyUp = boss.dying ? Math.min(1, boss.deathT / 0.9) : 0; // Grumblegill rolls belly-up and sinks a little before the burst
+  var bm = compose(boss.x + jx, curY - bellyUp * 0.6, boss.z + jz, 0, boss.heading + Math.sin(boss.bob) * 0.05, bellyUp * Math.PI, BOSS_SCALE, BOSS_SCALE, BOSS_SCALE);
   var crackle = boss.dying ? (Math.sin(boss.deathT * 26) > 0 ? 0.9 : 0.15) : 0;
   for (var q = 0; q < boss.parts.length; q++) {
     var part = boss.parts[q];
-    part.item.mat = mul(bm, part.item.local);
+    part.item.mat = mul(bm, part.anim ? bossPartLocal(part) : part.item.local);
     part.item.alpha = 1;
     part.item.emiScale = 1 + boss.warnT * 0.7 + crackle * 0.8;
     part.item.flash = Math.max(boss.hitT, crackle * 0.85);

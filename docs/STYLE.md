@@ -90,3 +90,27 @@ Looks 2–5 get their full pass in Phase 3.
 - **Low decor** (banks, rocks, moss, lily pads) casts no shadow.
 - **`tools/perf-crowd.mjs`** benchmarks Arena 4 mid-fight with N froglets and 4 eggs. With 10 froglets it measures 281 draws, 395k triangles and a p90 of about 14 ms on High at 1440p.
 - **`tools/tri-report.mjs`** lists triangles by item group.
+
+## Critters (Phase 5)
+- **Snapjaw Crab** (Charger):
+  - **Model:** a chunky red shell with cheeks and a grin, eye-stalks with googly eyes and cheeky brows, two pincer arms and six legs.
+  - **Animation** (`crabPartLocal`, driven by the charger's `state` and `bob`):
+    - `shake`: claws up and clacking, feet stamping
+    - `rush`: claws snapping
+    - `dizzy`: claws droop and stars circle its head
+- **Puffle the Puffer** (Spreader):
+  - **Model:** a peach balloon fish with freckles, blush, googly eyes and a little "o" mouth.
+  - **Animation:** 18 spikes sit just under the skin and pop out as `swell` rises; the fins flap and the tail wags.
+- **Old Grumblegill** (Great Pike):
+  - **Model:**
+    - a steel-blue pike with spots and an underbite jaw with upward teeth (the jaw opens on the existing burst warning)
+    - heavy grumpy brows and a reed crown with two cattails
+  - **Animation:**
+    - four body segments and a tail swim on a travelling wave
+    - the side fins flare with `warnT`
+    - on defeat it rolls belly-up and sinks before the burst
+- **Bonks** (`spawnBonk`): when a critter is beaten, a cosmetic copy squashes and wobbles under dizzy stars, then tumbles off with a splash. The puffer zips away spinning instead. The game state (removal, pearls, eggs) is untouched.
+- **Spawn telegraph**: an amber dashed ring turns on the pad while bubbles rise where the critter will pop up.
+- **Berries** are round, with a soft amber halo instead of the old streak (the "carrots"). They cast no shadow.
+- **Debug**: with `?debug`, setting `window.__phHitboxes = true` draws every hit radius as a magenta ring (capture `59-hitbox`).
+- **Budgets**: the pad uses a low-poly disc as its shadow proxy. The crowd test (10 froglets, 4 eggs) is 248 draws and 394k triangles; the boss fight is 134 draws and 283k triangles.
