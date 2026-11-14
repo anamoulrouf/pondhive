@@ -67,3 +67,26 @@ Looks 2–5 get their full pass in Phase 3.
 - **Determinism.** The new decor uses its own seeded generator (`drand`), and all animation runs on `ambientTime`. Gameplay never sees any of it.
 - **Budget.** Small decor (grass, flowers, toadstools) lives in a separate mesh that casts no shadow. The boss fight is about 372k triangles across both passes and 178 draws.
 - **Boss dimming.** It now goes only part of the way (`dimK`), so the daylight looks never go murky.
+
+## Frogs, eggs and pickups (Phase 4)
+- **Hero actions** are all cosmetic and read existing timers:
+  - **Hop:** squash and stretch, as before.
+  - **Dash:** a belly-slide lean (`heroRig.slideK`) with a translucent clay afterimage.
+  - **Hurt:** squeezed > < eyes while `hurtT > 0.2`.
+  - **Defeat:** the frog flops onto its back with X eyes and a tear.
+  - **Cleared:** a cheer, with the watering can raised and the bandana fluttering.
+- **Froglets** use the hero's frog model (`buildFrogModel('froglet')`): mint palette, half size, a lighter level of detail, with the bandana tails baked in. That is two draws each.
+  - **Goodbye:** a wiggle, then a leap-and-dive while fading.
+  - All of this is a visual offset only. `c.x` and `c.z` are never changed, so parity holds.
+- **Eggs** are clear jelly frogspawn with a tadpole circling inside, over a soft mint ring. Hatch shards are mint jelly.
+- **Pickups and shots:**
+  - **Pearls:** cream, using the pearl material.
+  - **Sparkles:** cream; the old gold is gone.
+  - **Hero shots:** water droplets (round nose, tapered tail, pale with an aqua edge) with a mist trail.
+  - **Froglet shots:** mint bubbles.
+
+### Budgets
+- The **hero's shadow** is drawn from the froglet mesh (`item.shadowMesh`), which has the same silhouette at a fifth of the triangles.
+- **Low decor** (banks, rocks, moss, lily pads) casts no shadow.
+- **`tools/perf-crowd.mjs`** benchmarks Arena 4 mid-fight with N froglets and 4 eggs. With 10 froglets it measures 281 draws, 395k triangles and a p90 of about 14 ms on High at 1440p.
+- **`tools/tri-report.mjs`** lists triangles by item group.

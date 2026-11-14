@@ -108,6 +108,14 @@ const SHOTS = [
   ['35-falls', (ph) => { ph.goto('play', 3); ph.cam([6.2, 3.2, -5.6], [10.8, 1.2, -11.0]); }, 30],
   ['36-lanterns', (ph) => { ph.goto('play', 4); ph.cam([0, 6.5, 15], [0, 0.5, -2]); }, 30],
   ['37-life', (ph) => { ph.goto('play', 0); ph.cam([-6, 4.5, -4], [-11.5, 0.5, -10.5]); }, 30],
+  ['40-froglets', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 1; for (var i = 0; i < 4; i++) spawnCompanion(-1.5 + i, 2.5); ph.cam([2.5, 2.6, 4.2], [0, 0.4, -0.6]); }, 90],
+  ['41-egg', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = -3; frog.z = 3; spawnEggAt(0, 0.5); ph.cam([1.2, 2.2, 3.6], [0, 0.6, 0.5]); }, 90],
+  ['42-pearls', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = -4; frog.z = 4; dropPearls(0, 0, 6); ph.cam([1.0, 2.4, 3.2], [0, 0.3, 0]); }, 90],
+  ['43-dash', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = -2; frog.z = 0; frog.heading = frog.aimHeading = Math.PI / 2; ph.aim([8, 0]); keys = { KeyD: true }; startDash(1, 0); ph.cam([0, 2.6, 5.5], [0, 0.6, 0]); }, 6],
+  ['44-hurt', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 2; frog.heading = frog.aimHeading = 0; frog.hurtT = 1; ph.cam([0.4, 2.2, 6.2], [0, 0.85, 2]); }, 2],
+  ['45-defeat', (ph) => { ph.goto('fail', 1); frog.heading = 0; ph.cam([2.2, 3.2, frog.z + 4.5], [frog.x, 0.5, frog.z]); }, 40],
+  ['46-cheer', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 2; frog.heading = frog.aimHeading = 0; gameState = 'cleared'; clearedT = 0.3; ph.cam([0.4, 2.4, 6.6], [0, 1.0, 2]); }, 30],
+  ['47-shots', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = -3; frog.z = 1; frog.heading = frog.aimHeading = Math.PI / 2; ph.aim([9, 1]); mouse.down = true; spawnCompanion(-4, 2.5); ph.spawn('S', 5, 1); ph.cam([-1, 3.0, 6.5], [0, 0.5, 1]); }, 40],
 ];
 async function shots() {
   const file = opt('file', 'pondhive.html');
