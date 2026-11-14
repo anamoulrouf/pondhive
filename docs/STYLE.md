@@ -13,7 +13,7 @@ Style references: `references/style/1.webp` (sticker sheet), `2.webp` and `3.web
 | Pearls | Cream `#fff6df`, pink-blue sheen | Shiny sphere |
 | Critters | Coral `#f2795f`, crab red `#e5574a`, puffer peach `#f4a46b` | Grumpy brows, cheeky faces |
 | **Enemy shots (danger only)** | Orange `#ff6a3d` core in a plum ring `#5a1e2e`, amber halo/telegraph `#ffb347` | Round "sour berry" with a dark ring |
-| World | Water `#9ad8e2`→`#5aaecb`, pad `#63ab55`, grass `#9fd27a`, moss `#8cbf5a`, sand `#e8d3a8`, rock `#bab4aa`, bark `#8a6446`, blossom `#f6b8c8`, willow `#8fc46a` | Rounded, pressed, soft |
+| World | Water `#9ad8e2`→`#5aaecb`, pad `#97c460` centre → `#70aa4c` edge, lip `#b2db7c`, grass `#9fd27a`, moss `#8cbf5a`, sand `#e8d3a8`, rock `#bab4aa`, bark `#8a6446`, blossom `#f6b8c8`, willow `#8fc46a` | Rounded, pressed, soft |
 | UI | Paper `#fbf4e4`, ink `#4a3b2a`, button `#7cc36a`, accent `#f7d55a` | Storybook cards, puffy clay buttons |
 
 Rules: orange-red with a dark ring is danger and nothing else. Gold is gone (pearls are cream). Mint is friendly.
@@ -22,7 +22,7 @@ The pad sits at mid luminance so light droplets and dark-ringed berries both sta
 ## Materials (renderer 2.0)
 - **clay**: half-Lambert, warm key / cool fill, fresnel rim, warm light-to-shadow edge, two-scale thumbprint texture and a gentle normal wobble, contact darkening near the ground.
 - **gloss**: eyes, watering can. **jelly**: Perch helmet, eggs (fresnel transparency). **pearl**: view-angle sheen.
-- **pad**: clay ground + per-pixel radial veins, lighter centre, cream inner edge line.
+- **pad**: real lily-pad leaf — yellow-green clay with a brighter centre, a V-notch and midrib slit at the back (`PAD_NOTCH`, cosmetic only: a narrow wedge about 1.3 units deep and 1.5 wide at the rim; the playable circle is unchanged, so a frog hugging the back edge can overlap the wedge slightly), 14 softly curved main veins plus fine secondaries, low-frequency mottling, and a wavy rolled rim with a light lip that marks the edge.
 - **water**: shallow→deep gradient, caustics, ripple rings, foam ring at the pad, sun glint.
 
 ## Lighting looks
