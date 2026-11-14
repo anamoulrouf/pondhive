@@ -1,7 +1,7 @@
 # Text-diffs the gameplay tuning between Turn 22 and PondHive: BALANCE, arena waves, hit radii, speeds, timers.
 #   python3 tools/balance-diff.py   (exit 1 on any difference)
 import re, sys
-b = open('baseline/game-turn-22.html').read(); n = open('pondhive.html').read()
+b = open('baseline/game-turn-22.html').read(); n = open('index.html').read()
 bad = 0
 def block(src, start, end): i = src.index(start); return src[i:src.index(end, i)]
 for name, a, e in [("BALANCE", "var BALANCE = {", "\n};"), ("ARENAS", "var ARENAS = [", "\n];")]:

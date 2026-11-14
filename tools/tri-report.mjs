@@ -5,7 +5,7 @@ const d = fs.readdirSync(base).filter((x) => /^chromium-\d+$/.test(x)).sort().re
 const exe = path.join(base, d, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
 const b = await chromium.launch({ executablePath: exe, args: ['--use-angle=metal'] });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
-await p.goto('file://' + path.resolve('pondhive.html') + '?debug');
+await p.goto('file://' + path.resolve('index.html') + '?debug');
 await p.waitForFunction(() => window.__ph);
 console.log(await p.evaluate((ch) => { const ph = window.__ph; ph.stepMode(true); ph.seed(3); ph.goto('play', ch); ph.step(240, { script: true });
   const vis = items.filter(it => !(it.mat[13] < -9 || (Math.abs(it.mat[0])+Math.abs(it.mat[5])+Math.abs(it.mat[10])) < 0.01) && it.alpha > 0);

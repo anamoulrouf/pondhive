@@ -8,7 +8,7 @@ const b = await chromium.launch({ executablePath: exe, args: ['--use-angle=metal
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 p.on('pageerror', (e) => console.log('PAGEERROR', e.stack || e.message));
 p.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log(m.type(), m.text()); });
-await p.goto('file://' + path.resolve(process.argv[2] || 'pondhive.html') + '?debug');
+await p.goto('file://' + path.resolve(process.argv[2] || 'index.html') + '?debug');
 await p.waitForTimeout(1500);
 if (process.argv[3]) console.log(await p.evaluate(process.argv[3]));
 await b.close();

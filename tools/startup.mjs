@@ -5,7 +5,7 @@ const base = path.join(os.homedir(), 'Library/Caches/ms-playwright');
 const d = fs.readdirSync(base).filter((x) => /^chromium-\d+$/.test(x)).sort().reverse()[0];
 const exe = path.join(base, d, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
 const b = await chromium.launch({ executablePath: exe, args: ['--use-angle=metal', '--enable-gpu'] });
-for (const file of process.argv.slice(2).length ? process.argv.slice(2) : ['pondhive.html']) {
+for (const file of process.argv.slice(2).length ? process.argv.slice(2) : ['index.html']) {
   const runs = [];
   for (let i = 0; i < 3; i++) {
     const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });

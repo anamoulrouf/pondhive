@@ -4,8 +4,8 @@ PondHive must play exactly like Pondswarm Turn 22. This is checked by running bo
 side by side, frame by frame, with the same seed and the same scripted player.
 
 ## How it works
-- `tools/harness.js` is injected identically into `pondhive.html` and `baseline/game-turn-22.html`
-  (`node tools/inject-harness.mjs pondhive.html baseline/game-turn-22.html`). It is inert unless the URL has `?debug`.
+- `tools/harness.js` is injected identically into `index.html` and `baseline/game-turn-22.html`
+  (`node tools/inject-harness.mjs index.html baseline/game-turn-22.html`). It is inert unless the URL has `?debug`.
 - `__ph.seed(n)` replaces `Math.random` with mulberry32; `__ph.stepMode(true)` pauses the real-time loop and
   starts a fake clock at 0, so every build sees identical frame times.
 - A built-in scripted player (`__ph.scriptInput`) moves in 8 directions, aims at the nearest enemy, fires

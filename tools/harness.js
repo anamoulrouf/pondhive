@@ -1,4 +1,4 @@
-// PondHive debug harness (identical in pondhive.html and baseline/game-turn-22.html).
+// PondHive debug harness (identical in index.html and baseline/game-turn-22.html).
 // Active only with ?debug in the URL. Lets tools/capture.mjs jump to any state, step the
 // fixed-timestep loop deterministically, and read a gameplay snapshot for parity checks.
 (function () {

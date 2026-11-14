@@ -1,7 +1,7 @@
 // PondHive capture + parity tool.
-//   node tools/capture.mjs shots  [--out captures/phase0] [--file pondhive.html] [--tier high]
+//   node tools/capture.mjs shots  [--out captures/phase0] [--file index.html] [--tier high]
 //   node tools/capture.mjs parity [--steps 3600] [--arena 1]
-//   node tools/capture.mjs perf   [--file pondhive.html]
+//   node tools/capture.mjs perf   [--file index.html]
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,7 +42,7 @@ async function parity() {
   const scenario = opt('scenario', 'arena');
   const browser = await launch();
   const runs = [];
-  for (const file of ['baseline/game-turn-22.html', opt('file', 'pondhive.html')]) {
+  for (const file of ['baseline/game-turn-22.html', opt('file', 'index.html')]) {
     const { page, errors } = await openGame(browser, file);
     const trace = await page.evaluate(({ steps, arena, seed, scenario }) => {
       const ph = window.__ph;
@@ -154,7 +154,7 @@ const SHOTS = [
   ['97-end-attack', (ph) => { ph.goto('play', 12); startEnding(false); }, 1440],
 ];
 async function shots() {
-  const file = opt('file', 'pondhive.html');
+  const file = opt('file', 'index.html');
   const out = path.join(ROOT, opt('out', 'captures/latest'));
   const only = opt('only', null);
   const tier = opt('tier', null);
@@ -181,7 +181,7 @@ async function shots() {
 
 // ---------------------------------------------------------------- perf (real-time frames)
 async function perf() {
-  const file = opt('file', 'pondhive.html'), tier = opt('tier', null);
+  const file = opt('file', 'index.html'), tier = opt('tier', null);
   const vw = +opt('w', 2560), vh = +opt('h', 1440);
   const browser = await launch();
   const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });

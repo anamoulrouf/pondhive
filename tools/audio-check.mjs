@@ -5,7 +5,7 @@ import path from 'node:path'; import os from 'node:os'; import fs from 'node:fs'
 const base = path.join(os.homedir(), 'Library/Caches/ms-playwright');
 const d = fs.readdirSync(base).filter((x) => /^chromium-\d+$/.test(x)).sort().reverse()[0];
 const exe = path.join(base, d, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
-const file = process.argv[2] || 'pondhive.html';
+const file = process.argv[2] || 'index.html';
 const b = await chromium.launch({ executablePath: exe, args: ['--autoplay-policy=no-user-gesture-required'] });
 const p = await b.newPage();
 const errors = []; p.on('pageerror', (e) => errors.push(e.message));
