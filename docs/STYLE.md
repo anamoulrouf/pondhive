@@ -133,3 +133,24 @@ Looks 2–5 get their full pass in Phase 3.
   - "Arena Cleared!" becomes **Chapter Complete!**
   - Upgrade names are unchanged.
 - **Contrast**: every body text and button pair is at least 4.5:1 (white on the button at its centre is about 4.5–4.8; ink on paper is 9.8). Large headings are at least 3:1; the fail heading is 4.2.
+
+## Cinematics (Phase 7)
+- **Intro**:
+  - A green storybook cover ("PondHive · A FROG TALE") swings open onto the pond (`#storyCover`); with reduced motion it fades instead.
+  - Captions start once the cover is open.
+  - In shot 3, googly critter eyes peek up out of the water instead of the old red glowing eyes, and the scene only dims slightly.
+- **The hive at rest** (`restActors`): cosmetic frogs built from the shared model, shown on the menu screens and during the ending:
+  - a reader with a red book on a floating lily pad
+  - a gardener watering the tulips
+  - a napper with closed eyes on the big mossy rock
+  - a tea party on the pad (blanket, teapot, cake, a frog with a cup and a froglet)
+  - three froglets playing ring-around
+  - The background frogs use the light mesh, and the menu is 94 draws and 346k triangles.
+- **Ending**:
+  - a soft **dawn** look replaces the old sepia screen filter and tint overrides
+  - froglets hatch from the nest, and the camera frames the hero cheering with them
+  - "Say cheese!" is followed by a flash (softened under reduced motion); the frame is captured into the **polaroid** card with a handwritten caption and the stats
+- **Turn-20 regressions re-checked**:
+  - the HUD is hidden during the intro
+  - skipping the intro leaves no critters behind (0 active, 0 visible)
+  - the Arena 1 tutorial banner still shows

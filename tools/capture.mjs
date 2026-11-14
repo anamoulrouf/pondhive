@@ -128,6 +128,14 @@ const SHOTS = [
   ['59-hitbox', (ph) => { window.__phHitboxes = true; ph.goto('play', 3); }, 300, true],
   ['60-bonk-late', (ph) => { ph.goto('play', 1); setLook('meadow'); deactivateAllEnemies(); pendingSpawns.length = 0; frog.x = 0; frog.z = 3; var e = ph.spawn('P', 0, -2); killSpreader(e); ph.cam([2.6, 3.4, 3.6], [0, 1.4, -3]); }, 48],
 
+  ['70-cover', (ph) => { ph.goto('intro'); }, 20],
+  ['71-intro-critters', (ph) => { ph.goto('intro'); }, 800],
+  ['72-menu-reader', (ph) => { ph.goto('menu'); ph.cam([-9.0, 3.2, -5.2], [-11.8, 0.6, -8.6]); }, 60],
+  ['73-menu-tea', (ph) => { ph.goto('menu'); ph.cam([-2.6, 3.0, 9.6], [-4.4, 0.6, 6.0]); }, 60],
+  ['74-menu-garden', (ph) => { ph.goto('menu'); ph.cam([19.6, 3.0, 4.6], [16.8, 0.8, 0.6]); }, 60],
+  ['75-menu-nap', (ph) => { ph.goto('menu'); ph.cam([-11.8, 3.4, -3.6], [-14.8, 1.4, -6.8]); }, 60],
+  ['76-ending-photo', (ph) => { ph.goto('ending'); }, 815],
+  ['77-polaroid', (ph) => { ph.goto('ending'); }, 900],
 ];
 async function shots() {
   const file = opt('file', 'pondhive.html');
