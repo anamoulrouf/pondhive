@@ -28,3 +28,10 @@ All must print `PARITY OK`.
 
 ## Proof the check is sensitive
 Changing `frogSpeed` from 4.2 to 4.25 fails at the first snapshot (step 60).
+
+## Audio randomness (Phase 8)
+Turn 22's sound effects and music called `Math.random()` (14 calls), so in the real game, playing a sound shifted the gameplay random stream. PondHive moves every audio call to its own generator (`arand`). As a result:
+- Gameplay keeps all **74** of its `Math.random()` calls from Turn 22, in the same code paths and order.
+- Turning sound on or off can no longer change enemy patterns.
+
+The parity runs never unlock audio, so they behave exactly as before.

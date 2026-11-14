@@ -154,3 +154,27 @@ Looks 2–5 get their full pass in Phase 3.
   - the HUD is hidden during the intro
   - skipping the intro leaves no critters behind (0 active, 0 visible)
   - the Arena 1 tutorial banner still shows
+
+## Audio (Phase 8)
+- **Mix**: master gain 0.5, then a glue compressor (−20 dB, 3.5:1), then a fast limiter (−4 dB, 20:1). Music and ambience run through the existing pause-muffle filter.
+  - `tools/audio-check.mjs` measures each sound and music state at the output. Turn 22 sat around **−42 dBFS RMS**, which was the "too quiet" note. PondHive sits around **−24 dB RMS** for music, with sound-effect peaks at −4 to −10 dBFS and no clipping.
+- **Instruments**:
+  - Karplus-Strong plucks (kalimba and ukulele), rendered once per pitch into buffers
+  - marimba, woodblock, a shaker on the off-beats, a soft kick
+  - an oom-pah tuba for Old Grumblegill
+  - a music box for the ending
+- **Tracks**:
+  - menu: a 3/4 pond waltz
+  - chapters: bouncy plucked bass, woodblock on 2 and 4
+  - boss: tuba and marimba oom-pah
+  - ending: music-box reprise
+  - The per-state crossfades are unchanged.
+- **Sound effects**:
+  - hero: watering-can "plip" shots, a splashy dash with a ribbit (throttled), a "boing" bonk on hits
+  - crab: clack-clack warning, scuttle rush, bonk with dizzy chirps
+  - puffer: inflate creak, "pfft" burst, deflating raspberry
+  - perch: bonk with a bubble-helmet pop
+  - pickups: jelly bloop on hatch, bell chime for pearls
+  - boss: Old Grumblegill's grumble with a tuba blat, a big splash on defeat
+  - chapter complete: a ukulele strum
+- **Ambience**: water drops always. Birdsong by day; crickets and frog croaks at dusk.

@@ -4156,7 +4156,11 @@ function computeAim() {
 }
 
 // Quiet synthesized "pew": short descending sine blip through a low master gain.
+// Audio-only random numbers: sound never touches Math.random, so turning sound on or off can't shift gameplay.
+var _audSeed = 77731;
+function arand() { _audSeed = (_audSeed * 16807) % 2147483647; return (_audSeed - 1) / 2147483646; }
 var GameAudio = {
+  MASTER_ON: 0.5,
   ctx: null, master: null, musicBus: null, ambBus: null, musicFilter: null, enabled: true,
   fxMuted: false, voices: 0, lastPlay: {},
   unlock: function () {
@@ -4165,8 +4169,14 @@ var GameAudio = {
     if (!AC) return;
     this.ctx = new AC();
     this.master = this.ctx.createGain();
-    this.master.gain.value = this.enabled ? 0.16 : 0; // SFX stay deliberately quiet for rapid fire
-    this.master.connect(this.ctx.destination);
+    this.master.gain.value = this.enabled ? this.MASTER_ON : 0;
+    // Master bus: a gentle glue compressor, then a fast limiter, so rapid fire stays even and nothing clips.
+    var comp = this.ctx.createDynamicsCompressor();
+    comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 3.5; comp.attack.value = 0.004; comp.release.value = 0.22;
+    var lim = this.ctx.createDynamicsCompressor();
+    lim.threshold.value = -4; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.08;
+    this.master.connect(comp); comp.connect(lim); lim.connect(this.ctx.destination);
+    this.outNode = lim; // (level checks in tools/audio-check.mjs tap here)
     // Music and ambience run below SFX loudness, through a shared pause-muffle filter.
     this.musicFilter = this.ctx.createBiquadFilter();
     this.musicFilter.type = 'lowpass'; this.musicFilter.frequency.value = 16000;
@@ -4197,25 +4207,18 @@ var GameAudio = {
     src.onended = function () { self.voices = Math.max(0, self.voices - 1); };
     return true;
   },
-  pew: function () {
-    if (!this.ctx || !this.enabled || this.fxMuted) return;
-    if (!this.throttle('pew', 0.05)) return;
-    var t0 = this.ctx.currentTime;
-    var osc = this.ctx.createOscillator(), g = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880 + Math.random() * 60, t0);
-    osc.frequency.exponentialRampToValueAtTime(320, t0 + 0.09);
-    g.gain.setValueAtTime(0.5, t0);
-    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.10);
-    osc.connect(g); g.connect(this.master);
-    osc.start(t0); osc.stop(t0 + 0.11);
+  pew: function () {                                            // watering-can droplet "plip"
+    if (!this.live() || !this.throttle('pew', 0.05)) return;
+    var t0 = this.ctx.currentTime, f = 760 + arand() * 90;
+    this.sweep('sine', f, f * 2.1, t0, 0.055, 0.34);
+    this.sweep('sine', f * 1.5, f * 2.6, t0 + 0.02, 0.04, 0.12);
   },
   blip: function (type, f0, f1, dur, vol) {
     if (!this.ctx || !this.enabled || this.fxMuted) return;
     var t0 = this.ctx.currentTime;
     var osc = this.ctx.createOscillator(), g = this.ctx.createGain();
     if (!this.trackVoice(osc)) return;
-    var det = 1 + (Math.random() - 0.5) * 0.05; // light pitch variety on repeats
+    var det = 1 + (arand() - 0.5) * 0.05; // light pitch variety on repeats
     osc.type = type;
     osc.frequency.setValueAtTime(f0 * det, t0);
     osc.frequency.exponentialRampToValueAtTime(Math.max(30, f1 * det), t0 + dur);
@@ -4224,16 +4227,56 @@ var GameAudio = {
     osc.connect(g); g.connect(this.master);
     osc.start(t0); osc.stop(t0 + dur + 0.02);
   },
-  eshot: function () { this.blip('square', 300, 140, 0.12, 0.28); },
-  hit: function () { this.blip('triangle', 520, 260, 0.07, 0.4); },
-  hurt: function () { this.blip('sawtooth', 240, 90, 0.16, 0.45); },
+  // --- storybook SFX kit ---
+  live: function () { return this.ctx && this.enabled && !this.fxMuted; },
+  sweep: function (type, f0, f1, t0, dur, vol, dest, q) {      // oscillator glide with an optional bandpass
+    var o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    if (!this.trackVoice(o)) return null;
+    o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol, t0 + Math.min(0.01, dur * 0.2)); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    if (q) { var f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = q[0]; f.Q.value = q[1]; o.connect(f); f.connect(g); } else o.connect(g);
+    g.connect(dest || this.master); o.start(t0); o.stop(t0 + dur + 0.03);
+    return { osc: o, gain: g };
+  },
+  noise: function (t0, dur, type, freq, q, vol, dest) {         // filtered noise burst
+    var len = Math.max(64, Math.floor(this.ctx.sampleRate * dur)), buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = (arand() * 2 - 1) * (1 - i / len);
+    var src = this.ctx.createBufferSource(); src.buffer = buf;
+    var f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q || 0.8;
+    var g = this.ctx.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(dest || this.master); src.start(t0);
+  },
+  wobble: function (node, t0, dur, rate, depth) {               // LFO on a gain or frequency param
+    var l = this.ctx.createOscillator(), lg = this.ctx.createGain();
+    l.frequency.value = rate; lg.gain.value = depth; l.connect(lg); lg.connect(node); l.start(t0); l.stop(t0 + dur + 0.05);
+  },
+  boing: function (f, vol) {                                    // cartoon bonk: a springy wobbling sine
+    if (!this.live()) return;
+    var t0 = this.ctx.currentTime, v = this.sweep('sine', f * 1.25, f * 0.7, t0, 0.24, vol);
+    if (v) this.wobble(v.osc.frequency, t0, 0.24, 26, f * 0.14);
+  },
+  clack: function (delay, vol) {                                // crab pincer / woodblock click
+    if (!this.live()) return;
+    var t0 = this.ctx.currentTime + (delay || 0);
+    this.noise(t0, 0.035, 'bandpass', 2300, 5, vol * 1.6);
+    this.sweep('sine', 1500, 900, t0, 0.035, vol);
+  },
+  ribbit: function () {                                         // formant croak, two pulses
+    if (!this.live() || !this.throttle('ribbit', 1.2)) return;
+    var t0 = this.ctx.currentTime;
+    this.sweep('sawtooth', 165, 120, t0, 0.075, 0.32, null, [950, 6]);
+    this.sweep('sawtooth', 175, 125, t0 + 0.1, 0.09, 0.3, null, [1050, 6]);
+  },
+  eshot: function () { if (this.live() && this.throttle('eshot', 0.03)) this.sweep('sine', 280, 150, this.ctx.currentTime, 0.09, 0.3); },   // berry "thup"
+  hit: function () { if (this.throttle('hitb', 0.05)) { this.boing(520 + arand() * 60, 0.26); this.clack(0, 0.12); } },
+  hurt: function () { if (!this.live()) return; var t0 = this.ctx.currentTime; this.sweep('triangle', 340, 140, t0, 0.2, 0.45, null, [700, 2]); this.boing(240, 0.2); },
   whoosh: function () {
     if (!this.ctx || !this.enabled) return;
     // Quick filtered-noise sweep up then down: a soft dash whoosh.
     var t0 = this.ctx.currentTime, dur = 0.24, len = Math.floor(this.ctx.sampleRate * dur);
     var buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     var data = buf.getChannelData(0);
-    for (var i = 0; i < len; i++) { var env = Math.sin((i / len) * Math.PI); data[i] = (Math.random() * 2 - 1) * env; }
+    for (var i = 0; i < len; i++) { var env = Math.sin((i / len) * Math.PI); data[i] = (arand() * 2 - 1) * env; }
     var src = this.ctx.createBufferSource(); src.buffer = buf;
     var filt = this.ctx.createBiquadFilter(); filt.type = 'bandpass'; filt.Q.value = 1.1;
     filt.frequency.setValueAtTime(420, t0);
@@ -4244,14 +4287,29 @@ var GameAudio = {
     g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     src.connect(filt); filt.connect(g); g.connect(this.master);
     src.start(t0);
+    this.noise(t0, 0.2, 'highpass', 2600, 0.6, 0.12);   // a little splash on the slide
+    this.ribbit();
   },
   readyClick: function () { this.blip('sine', 1250, 900, 0.05, 0.22); },
-  chargeWarn: function () { this.blip('square', 180, 240, 0.16, 0.30); },
-  chargeRush: function () { this.blip('sawtooth', 140, 320, 0.20, 0.35); },
-  chargerPop: function () { this.blip('square', 260, 60, 0.20, 0.5); },
-  spreadWarn: function () { this.blip('sine', 240, 420, 0.30, 0.28); },
-  spreadBurst: function () { this.blip('triangle', 520, 180, 0.16, 0.38); },
-  spreaderPop: function () { this.blip('sine', 340, 70, 0.24, 0.55); },
+  chargeWarn: function () { this.clack(0, 0.3); this.clack(0.09, 0.3); this.clack(0.2, 0.26); },          // crab clack-clack
+  chargeRush: function () { for (var i = 0; i < 6; i++) this.clack(i * 0.05, 0.16); },                    // scuttle
+  chargerPop: function () {                                                                                // bonk + dizzy chirps
+    this.boing(300, 0.42);
+    if (!this.live()) return;
+    var t0 = this.ctx.currentTime;
+    for (var i = 0; i < 3; i++) this.sweep('sine', 1700 - i * 120, 1250 - i * 120, t0 + 0.12 + i * 0.08, 0.06, 0.12);
+  },
+  spreadWarn: function () {                                                                                // puffer inflate creak
+    if (!this.live()) return;
+    var t0 = this.ctx.currentTime, v = this.sweep('sawtooth', 150, 430, t0, 0.62, 0.36, null, [650, 3]);
+    if (v) this.wobble(v.gain.gain, t0, 0.62, 17, 0.08);
+  },
+  spreadBurst: function () { if (!this.live()) return; var t0 = this.ctx.currentTime; this.noise(t0, 0.12, 'highpass', 1400, 0.7, 0.32); this.sweep('sine', 720, 300, t0, 0.09, 0.25); },
+  spreaderPop: function () {                                                                               // deflating raspberry
+    if (!this.live()) return;
+    var t0 = this.ctx.currentTime, v = this.sweep('sawtooth', 150, 62, t0, 0.42, 0.42, null, [900, 1.2]);
+    if (v) this.wobble(v.gain.gain, t0, 0.42, 38, 0.3);
+  },
   noteAt: function (freq, delay, dur, vol) {
     if (!this.ctx || !this.enabled || this.fxMuted) return;
     var t0 = this.ctx.currentTime + delay;
@@ -4263,7 +4321,7 @@ var GameAudio = {
     osc.connect(g); g.connect(this.master);
     osc.start(t0); osc.stop(t0 + dur + 0.02);
   },
-  pip: function () { if (this.throttle('pip', 0.08)) this.blip('sine', 1150 + Math.random() * 120, 700, 0.06, 0.16); },
+  pip: function () { if (this.throttle('pip', 0.08)) this.blip('sine', 1150 + arand() * 120, 700, 0.06, 0.16); },
   tingCombo: 0, tingLast: 0,
   ting: function () {
     if (!this.ctx || !this.enabled) return;
@@ -4272,7 +4330,10 @@ var GameAudio = {
     this.tingLast = now;
     if (!this.throttle('ting', 0.04)) return;
     var mul = 1 + this.tingCombo * 0.07; // pitch climbs when pearls chain quickly
-    this.blip('sine', (1850 + Math.random() * 120) * mul, 1350 * mul, 0.07, 0.20);
+    if (this.fxMuted) return;
+    var t0 = this.ctx.currentTime, f = (1500 + arand() * 80) * mul;      // pearl chime: a little bell
+    this.sweep('triangle', f, f * 0.98, t0, 0.22, 0.2);
+    this.sweep('sine', f * 2.76, f * 2.7, t0, 0.12, 0.06);
   },
   warn: function () { this.blip('square', 330, 420, 0.11, 0.22); },
   bossHit: function () { this.blip('triangle', 300, 150, 0.08, 0.42); },
@@ -4297,13 +4358,16 @@ var GameAudio = {
     this.blip('sine', 720, 520, 0.05, 0.18);
     this.fxMuted = was;
   },
-  roar: function () {
-    this.blip('sawtooth', 95, 42, 0.85, 0.85);
-    this.blip('square', 65, 38, 0.85, 0.5);
+  roar: function () {                                           // Old Grumblegill's grumble + a tuba blat
+    if (this.live()) {
+      var t1 = this.ctx.currentTime, v = this.sweep('sawtooth', 92, 52, t1, 0.95, 0.6, null, [420, 1.4]);
+      if (v) this.wobble(v.gain.gain, t1, 0.95, 9, 0.25);
+      this.sweep('sawtooth', 110, 104, t1 + 0.05, 0.4, 0.3, null, [380, 2]);
+    }
     if (!this.ctx || !this.enabled) return;
     var t0 = this.ctx.currentTime, len = Math.floor(this.ctx.sampleRate * 0.7);
     var buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), data = buf.getChannelData(0);
-    for (var i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.sin((i / len) * Math.PI);
+    for (var i = 0; i < len; i++) data[i] = (arand() * 2 - 1) * Math.sin((i / len) * Math.PI);
     var src = this.ctx.createBufferSource(); src.buffer = buf;
     var filt = this.ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 320;
     var g = this.ctx.createGain(); g.gain.setValueAtTime(0.7, t0);
@@ -4322,7 +4386,7 @@ var GameAudio = {
     if (!this.ctx || !this.enabled) return;
     var t0 = this.ctx.currentTime, len = Math.floor(this.ctx.sampleRate * 0.45);
     var buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), data = buf.getChannelData(0);
-    for (var i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    for (var i = 0; i < len; i++) data[i] = (arand() * 2 - 1) * (1 - i / len);
     var src = this.ctx.createBufferSource(); src.buffer = buf;
     var filt = this.ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 700;
     var g = this.ctx.createGain(); g.gain.setValueAtTime(0.9, t0);
@@ -4338,8 +4402,8 @@ var GameAudio = {
     if (!this.ctx || !this.enabled) return;
     this.noteAt(784, 0, 0.14, 0.30); this.noteAt(587, 0.11, 0.22, 0.28);
   },
-  hatchPop: function () {
-    this.blip('sine', 360, 90, 0.16, 0.55);
+  hatchPop: function () {                                       // jelly "bloop" + chimes
+    if (this.live()) { var th = this.ctx.currentTime; this.sweep('sine', 720, 230, th, 0.16, 0.45); this.sweep('sine', 360, 900, th + 0.04, 0.08, 0.15); }
     this.noteAt(1047, 0.05, 0.12, 0.3); this.noteAt(1319, 0.12, 0.16, 0.3);
   },
   eggChime: function () {
@@ -4348,17 +4412,20 @@ var GameAudio = {
   },
   cleared: function () {
     if (!this.ctx || !this.enabled) return;
+    if (typeof Music !== 'undefined' && Music.started) { var tc = this.ctx.currentTime; [523, 659, 784, 1047, 1319].forEach(function (f, i) { Music.pluck(GameAudio.master, tc + i * 0.07, f, 0.34, true); }); }
+    this.ribbit();
     this.noteAt(523, 0, 0.16, 0.4); this.noteAt(659, 0.09, 0.16, 0.4);
     this.noteAt(784, 0.18, 0.20, 0.45); this.noteAt(1047, 0.28, 0.32, 0.5);
   },
-  pop: function () {
-    this.blip('sine', 220, 55, 0.22, 0.65);
+  pop: function () {                                            // perch bonk + bubble-helmet pop
+    this.boing(280, 0.36);
+    if (this.live()) { var tb = this.ctx.currentTime; this.sweep('sine', 320, 980, tb + 0.06, 0.07, 0.24); this.sweep('sine', 520, 1300, tb + 0.1, 0.05, 0.14); }
     if (!this.ctx || !this.enabled) return;
     // Short filtered noise burst on top of the thump for the pop texture.
     var t0 = this.ctx.currentTime, len = Math.floor(this.ctx.sampleRate * 0.14);
     var buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     var data = buf.getChannelData(0);
-    for (var i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    for (var i = 0; i < len; i++) data[i] = (arand() * 2 - 1) * (1 - i / len);
     var src = this.ctx.createBufferSource(); src.buffer = buf;
     var filt = this.ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 900;
     var g = this.ctx.createGain();
@@ -4374,10 +4441,44 @@ var GameAudio = {
 // Music and ambience sit below SFX; pause muffles them through GameAudio.musicFilter.
 var Music = {
   started: false, timer: null, current: null, decks: [], ambT: 0, heartT: 0,
+  pluckCache: {},
+  // Karplus-Strong string pluck rendered once per pitch into a buffer (kalimba / ukulele colour).
+  pluckBuf: function (freq) {
+    var key = Math.round(freq), ctx = GameAudio.ctx;
+    if (this.pluckCache[key]) return this.pluckCache[key];
+    var sr = ctx.sampleRate, len = Math.floor(sr * 1.1), buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    var N = Math.max(2, Math.round(sr / freq)), ring = new Float32Array(N), prev = 0;
+    for (var i = 0; i < N; i++) { var n = arand() * 2 - 1; prev = prev * 0.5 + n * 0.5; ring[i] = prev; }
+    for (var j = 0, idx = 0; j < len; j++) {
+      var a = ring[idx], b = ring[(idx + 1) % N];
+      d[j] = a; ring[idx] = (a + b) * 0.5 * 0.9965; idx = (idx + 1) % N;
+    }
+    return (this.pluckCache[key] = buf);
+  },
+  pluck: function (dest, t, freq, vol, bright) {
+    var ctx = GameAudio.ctx, src = ctx.createBufferSource(); src.buffer = this.pluckBuf(freq);
+    var f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = bright ? 4200 : 2200;
+    var g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.05);
+    src.connect(f); f.connect(g); g.connect(dest); src.start(t); src.stop(t + 1.1);
+  },
+  marimba: function (dest, t, f, vol) { this.tone(dest, t, f, 0.42, 'sine', vol); this.tone(dest, t, f * 4, 0.09, 'sine', vol * 0.22); },
+  woodblock: function (dest, t, vol) { this.tone(dest, t, 880, 0.045, 'sine', vol, 640); this.noiseHit(dest, t, 0.02, vol * 0.5, 2400); },
+  tuba: function (dest, t, f, dur, vol) {
+    var ctx = GameAudio.ctx, o = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f * 0.94, t); o.frequency.linearRampToValueAtTime(f, t + 0.05);
+    lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 2;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(lp); lp.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + 0.05);
+  },
+  musicBox: function (dest, t, f, vol) { this.tone(dest, t, f, 0.9, 'sine', vol); this.tone(dest, t, f * 3, 0.35, 'sine', vol * 0.18); },
+  bird: function (t) {
+    var amb = GameAudio.ambBus, n = 2 + Math.floor(arand() * 3), base = 2400 + arand() * 900;
+    for (var i = 0; i < n; i++) this.tone(amb, t + i * 0.11, base * (1 + (i % 2) * 0.18), 0.07, 'sine', 0.05, base * (1.3 - (i % 2) * 0.35));
+  },
   TRACKS: {
-    menu: { bpm: 72,
+    menu: { bpm: 72, waltz: true,        // a gentle pond waltz in 3/4 (12 eighths per bar)
       chords: [[220,262,330],[175,220,262],[196,247,294],[165,220,262]],
-      melody: [4,-1,-1,3,-1,2,-1,-1, 1,-1,2,-1,-1,-1,0,-1, -1,-1,2,-1,3,-1,-1,4, -1,3,-1,2,-1,1,-1,-1],
+      melody: [4,-1,-1,3,-1,-1, 2,-1,-1,1,-1,-1, 2,-1,3,-1,4,-1, 3,-1,-1,-1,-1,-1],
       scale: [440,523,587,659,784], bass: [110,87,98,110], pad: true, beat: false, drops: 0.05 },
     arena: { bpm: 104,
       chords: [[262,330,392],[220,262,330],[175,220,262],[196,247,294]],
@@ -4408,7 +4509,7 @@ var Music = {
     var ctx = GameAudio.ctx;
     var len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
     var last = 0;
-    for (var i = 0; i < len; i++) { last = last * 0.97 + (Math.random() * 2 - 1) * 0.03; d[i] = last * 2.2; }
+    for (var i = 0; i < len; i++) { last = last * 0.97 + (arand() * 2 - 1) * 0.03; d[i] = last * 2.2; }
     var src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
     var f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420;
     var g = ctx.createGain(); g.gain.value = 0.5;
@@ -4490,7 +4591,7 @@ var Music = {
     var ctx = GameAudio.ctx;
     var len = Math.max(64, Math.floor(ctx.sampleRate * dur));
     var buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
-    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    for (var i = 0; i < len; i++) d[i] = (arand() * 2 - 1) * (1 - i / len);
     var src = ctx.createBufferSource(); src.buffer = buf;
     var f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = freq || 5000;
     var g = ctx.createGain(); g.gain.value = vol;
@@ -4500,6 +4601,8 @@ var Music = {
   scheduleStep: function (deck, step, t) {
     var tr = this.TRACKS[deck.track];
     if (!tr) return;
+    this.ambience(step, t);
+    if (deck.track === 'menu') { this.waltzStep(deck, tr, step, t); return; }
     var bar = Math.floor(step / 16), s16 = step % 16, s32 = step % 32;
     var chord = tr.chords[bar % tr.chords.length];
     var stepDur = 60 / tr.bpm / 2;
@@ -4507,39 +4610,49 @@ var Music = {
     if (tr.pad && s16 === 0) this.padChord(deck.gain, t, chord, stepDur * 16);
     // Bass: menu/ending soft on bar starts; arena bouncing eighths; boss pulsing.
     var root = tr.bass[bar % tr.bass.length];
-    if (deck.track === 'boss') {
-      this.tone(deck.gain, t, s16 % 2 === 0 ? root : root * 2, stepDur * 0.95, 'sawtooth', 0.16);
-    } else if (deck.track === 'arena') {
-      if (s16 % 2 === 0) this.tone(deck.gain, t, s16 % 8 === 4 ? root * 1.5 : root, stepDur * 0.9, 'triangle', 0.20 * intensity);
+    if (deck.track === 'boss') {             // comedic oom-pah: tuba on the beat, marimba stabs between
+      if (s16 % 4 === 0) this.tuba(deck.gain, t, s16 % 8 === 0 ? root : root * 1.5, stepDur * 1.6, 0.34);
+      if (s16 % 4 === 2) chord.forEach(function (cf) { this.marimba(deck.gain, t, cf * 2, 0.07); }, this);
+    } else if (deck.track === 'arena') {      // bouncy plucked bass
+      if (s16 % 2 === 0) this.pluck(deck.gain, t, s16 % 8 === 4 ? root * 1.5 : root, 0.32 * intensity, false);
     } else if (s16 === 0) {
-      this.tone(deck.gain, t, root, stepDur * 6, 'sine', 0.14);
+      this.marimba(deck.gain, t, root, 0.16);
     }
-    // Light beat.
+    // Pond percussion: soft kick, woodblock on 2 and 4, shaker on the off-beats.
     if (tr.beat) {
-      if (s16 % 4 === 0) this.tone(deck.gain, t, deck.track === 'boss' ? 120 : 150, 0.12, 'sine', 0.5, 45);
-      if (s16 % 4 === 2 && (deck.track === 'boss' || arenaIndex >= 1)) this.noiseHit(deck.gain, t, 0.05, 0.10, 6000);
-      if (deck.track === 'boss' && s16 % 8 === 4) this.noiseHit(deck.gain, t, 0.09, 0.16, 1800);
+      if (s16 % 8 === 0) this.tone(deck.gain, t, 140, 0.12, 'sine', 0.42, 45);
+      if (s16 % 8 === 4) this.woodblock(deck.gain, t, 0.2);
+      if (s16 % 2 === 1 && (deck.track === 'boss' || arenaIndex >= 1)) this.noiseHit(deck.gain, t, 0.04, 0.07, 6500);
     }
-    // Plucked melody.
+    // Melody: ukulele/kalimba plucks; the ending is a music box.
     var mi = tr.melody[s32];
     if (mi >= 0) {
       var f = tr.scale[mi % tr.scale.length] * (deck.track === 'arena' ? Math.pow(1.059, arenaIndex) : 1);
-      this.tone(deck.gain, t, f, stepDur * (tr.pad ? 2.2 : 1.4), tr.dark ? 'square' : 'triangle', tr.dark ? 0.10 : 0.16);
+      if (deck.track === 'ending') this.musicBox(deck.gain, t, f * 2, 0.12);
+      else this.pluck(deck.gain, t, tr.dark ? f : f, tr.dark ? 0.22 : 0.3, !tr.dark);
     }
-    // Water drops, crickets and distant croaks ride on the ambience bus, not the decks.
-    if (tr.drops && Math.random() < tr.drops) {
-      var dt2 = 900 + Math.random() * 500;
-      var o = GameAudio.ctx.createOscillator(), g = GameAudio.ctx.createGain();
+  },
+  waltzStep: function (deck, tr, step, t) {
+    var bar = Math.floor(step / 12), s12 = step % 12, chord = tr.chords[bar % tr.chords.length], beat = 60 / tr.bpm;
+    if (s12 === 0) { this.marimba(deck.gain, t, tr.bass[bar % tr.bass.length], 0.2); this.padChord(deck.gain, t, chord, beat * 6); }
+    if (s12 === 4 || s12 === 8) { this.marimba(deck.gain, t, chord[1] * 2, 0.07); this.marimba(deck.gain, t, chord[2] * 2, 0.06); }
+    var mi = tr.melody[step % tr.melody.length];
+    if (mi >= 0) this.pluck(deck.gain, t, tr.scale[mi % tr.scale.length], 0.26, true);
+  },
+  ambience: function (step, t) {   // shared by every deck's step: water drops, birds by day, crickets and croaks at dusk
+    if (this.ambStep === step) return; this.ambStep = step;
+    var dusk = look && (look.name === 'dusk'), amb = GameAudio.ambBus;
+    if (arand() < 0.03) {
+      var dt2 = 900 + arand() * 500, o = GameAudio.ctx.createOscillator(), g = GameAudio.ctx.createGain();
       o.type = 'sine'; o.frequency.setValueAtTime(dt2, t); o.frequency.exponentialRampToValueAtTime(dt2 * 0.45, t + 0.09);
       g.gain.setValueAtTime(0.10, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-      o.connect(g); g.connect(GameAudio.ambBus); o.start(t); o.stop(t + 0.12);
+      o.connect(g); g.connect(amb); o.start(t); o.stop(t + 0.12);
     }
-    if (step % 64 === 20 && Math.random() < 0.6) { // distant frog croak, now and then
-      this.tone(GameAudio.ambBus, t, 170, 0.14, 'square', 0.05, 120);
-      this.tone(GameAudio.ambBus, t + 0.2, 165, 0.12, 'square', 0.04, 115);
+    if (!dusk && step % 16 === 7 && arand() < 0.22) this.bird(t);
+    if (step % 64 === 20 && arand() < (dusk ? 0.8 : 0.4)) {
+      this.tone(amb, t, 170, 0.14, 'square', 0.05, 120); this.tone(amb, t + 0.2, 165, 0.12, 'square', 0.04, 115);
     }
-    if (step % 8 === 3 && Math.random() < 0.25) // crickets
-      this.tone(GameAudio.ambBus, t, 4200, 0.04, 'sine', 0.018);
+    if (step % 4 === 3 && arand() < (dusk ? 0.6 : 0.06)) this.tone(amb, t, 4200, 0.04, 'sine', 0.02);
   },
   schedule: function () {
     if (!GameAudio.ctx || GameAudio.ctx.state !== 'running') return;
@@ -5510,7 +5623,7 @@ function applySoundSetting() {
   var label = 'Sound: ' + (GameAudio.enabled ? 'On' : 'Off');
   document.getElementById('soundToggleBtn').textContent = label;
   document.getElementById('pauseSoundBtn').textContent = label;
-  if (GameAudio.master) GameAudio.master.gain.value = GameAudio.enabled ? 0.16 : 0;
+  if (GameAudio.master) GameAudio.master.gain.value = GameAudio.enabled ? GameAudio.MASTER_ON : 0;
   try { localStorage.setItem('pondhive.sound', GameAudio.enabled ? 'on' : 'off'); } catch (err) {}
 }
 function toggleSound() {
