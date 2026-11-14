@@ -4200,7 +4200,7 @@ document.getElementById('gfxBtn').addEventListener('click', function () {
   setGraphics(GFX_ORDER[(GFX_ORDER.indexOf(gfx.setting) + 1) % GFX_ORDER.length]);
   updateGfxLabel();
 });
-updateGfxLabel();
+document.getElementById('settingsBtn').addEventListener('click', updateGfxLabel);
 document.getElementById('soundToggleBtn').addEventListener('click', toggleSound);
 document.getElementById('pauseSoundBtn').addEventListener('click', toggleSound);
 document.getElementById('playEndingBtn').addEventListener('click', function () {
