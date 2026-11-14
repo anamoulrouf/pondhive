@@ -136,6 +136,22 @@ const SHOTS = [
   ['75-menu-nap', (ph) => { ph.goto('menu'); ph.cam([-11.8, 3.4, -3.6], [-14.8, 1.4, -6.8]); }, 60],
   ['76-ending-photo', (ph) => { ph.goto('ending'); }, 815],
   ['77-polaroid', (ph) => { ph.goto('ending'); }, 900],
+  ['80-chapter6', (ph) => ph.goto('play', 5), 420, true],
+  ['81-chapter7', (ph) => ph.goto('play', 6), 420, true],
+  ['82-chapter8', (ph) => ph.goto('play', 7), 420, true],
+  ['83-chapter9', (ph) => ph.goto('play', 8), 420, true],
+  ['84-chapter10', (ph) => ph.goto('play', 9), 420, true],
+  ['85-chapter11', (ph) => ph.goto('play', 10), 420, true],
+  ['86-chapter12', (ph) => ph.goto('play', 11), 420, true],
+  ['87-chapter13', (ph) => ph.goto('play', 12), 420, true],
+  ['90-story-family', (ph) => { ph.goto('intro'); }, 500],
+  ['91-story-attack', (ph) => { ph.goto('intro'); }, 780],
+  ['92-story-kidnap', (ph) => { ph.goto('intro'); }, 1020],
+  ['93-story-save', (ph) => { ph.goto('intro'); }, 1260],
+  ['94-end-reunion', (ph) => { ph.goto('play', 12); startEnding(false); }, 330],
+  ['95-end-photo', (ph) => { ph.goto('play', 12); startEnding(false); }, 815],
+  ['96-end-eggs', (ph) => { ph.goto('play', 12); startEnding(false); }, 1230],
+  ['97-end-attack', (ph) => { ph.goto('play', 12); startEnding(false); }, 1440],
 ];
 async function shots() {
   const file = opt('file', 'pondhive.html');

@@ -178,3 +178,43 @@ Looks 2–5 get their full pass in Phase 3.
   - boss: Old Grumblegill's grumble with a tuba blat, a big splash on defeat
   - chapter complete: a ukulele strum
 - **Ambience**: water drops always. Birdsong by day; crickets and frog croaks at dusk.
+
+## Story, chapters and your artwork (Phase 9)
+- **Your art**:
+  - **Logo:** `references/logo.png`, embedded as a compressed WebP data URI on the begin screen, the menu, the storybook cover and the intro title.
+  - **Favicon:** `references/fab-logo.png`, at 64×64.
+  - **Hero:** remodelled after `references/hero-chracter.png`:
+    - brown bead eyes with a catchlight, a tiny nose, a wide smile
+    - a big cream belly and the yellow polka-dot bandana
+    - a watering can and a bug net
+    - The Queen and the froglets share the bead-eyed style.
+- **Story**:
+  - **Intro** (skippable):
+    1. The hero, the **Frog Queen** (pink bandana, gold crown) and four froglets play by the nest.
+    2. The critters strike.
+    3. Bubbles carry the Queen and the kids away over the pond.
+    4. The hero turns to you: "Thirteen chapters stand between you and your family. Save them!"
+  - **Ending** (after Chapter 13):
+    1. The family floats home in bubbles.
+    2. New froglets hatch, and you take the group photo; the polaroid's **Continue** button moves on.
+    3. More eggs are about to hatch… then the critters return and take the family again.
+    4. **Round 2** begins at Chapter 1.
+- **13 chapters**, each with its own light, props and critter mix:
+
+  | # | Name | Look | Mix |
+  |---|---|---|---|
+  | 1–5 | Lily Meadow · Reed Hollow · Willow Bend · Blossom Falls · Pike's Deep | as before | unchanged (Old Grumblegill at 5) |
+  | 6 | Misty Shallows | mist | balanced, 3 waves |
+  | 7 | Toadstool Glade | autumn | crab rush |
+  | 8 | Thunder Pond | storm, heavy rain | puffer storm |
+  | 9 | Moonlit Lilies | moon, fireflies | perch volleys |
+  | 10 | Petal Falls | pink petal light | everything at once |
+  | 11 | Sunbaked Lagoon | summer heat | crabs and puffers |
+  | 12 | Aurora Hollow | aurora | four waves |
+  | 13 | Grumblegill's Lair | ember dusk | Old Grumblegill rematch (1.6× HP) |
+
+- **Difficulty**:
+  - Chapters 1–5 use exactly the Turn 22 tuning.
+  - From Chapter 6 on, the same scaling keeps climbing at 0.4× the slope (`diffIdx`), with bigger waves.
+  - Each story round multiplies critter HP by 1 + 0.12 × (round − 1) and speed by 1 + 0.04 × (round − 1).
+  - Upgrades and pearls carry into the next round.

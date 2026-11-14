@@ -40,7 +40,7 @@ log.push('     chapter sign: ' + await p.textContent('#arenaName'));
 await p.keyboard.press('Escape'); await wait(300); await expect('Esc pauses', 'paused');
 await p.click('#resumeBtn'); await wait(300); await expect('Resume', 'play');
 // each chapter for 15 s of scripted play in step mode
-for (let a = 0; a < 5; a++) {
+for (let a = 0; a < 13; a++) {
   const r = await p.evaluate((a) => { const ph = window.__ph; ph.stepMode(true); ph.seed(11 + a); ph.goto('play', a); ph.step(900, { script: true, render: true }); return gameState + ' hp=' + Math.round(health) + ' wave=' + waveIndex; }, a);
   log.push(`     chapter ${a + 1} after 15 s: ${r}`);
 }
@@ -62,6 +62,21 @@ await p.evaluate(() => { if (gameState !== 'ending') { window.__ph.goto('ending'
 log.push('     polaroid shown: ' + await p.evaluate(() => document.getElementById('victoryScreen').classList.contains('show')));
 await p.evaluate(() => window.__ph.stepMode(false)); await p.click('#victoryMenuBtn'); await wait(500);
 await expect('Main Menu from the polaroid', ['menu', 'begin']);
+// Chapter 13 rematch -> ending -> polaroid Continue -> the twist -> Round 2 on the menu
+const loop = await p.evaluate(() => {
+  const ph = window.__ph; ph.stepMode(true); ph.goto('play', 12); waveIndex = ARENAS[12].waves.length - 1; wavesScheduled = true;
+  pendingSpawns.length = 0; deactivateAllEnemies(); startBossEntrance(); ph.step(150, { render: true });
+  const hp = boss.hp; hurtBoss(boss.x, boss.z, boss.hp + 1); ph.step(150, { render: true });
+  for (let i = 0; i < 8 && gameState !== 'ending'; i++) { if (gameState === 'cleared') clearedT = 99; ph.step(60, { render: true }); }
+  const s1 = gameState; ph.step(900, { render: true });
+  const pol = document.getElementById('victoryScreen').classList.contains('show');
+  document.getElementById('victoryMenuBtn').click(); ph.step(560, { render: true });
+  ph.step(200, { render: true });
+  return { rematchHp: Math.round(hp), chapter5Hp: BOSS_HP, afterBoss: s1, polaroid: pol, after: gameState, round: storyRound,
+    start: document.getElementById('startBtn').textContent, upgradesKept: JSON.stringify(upgrades) };
+});
+log.push('     chapter 13 -> loop: ' + JSON.stringify(loop));
+if (loop.afterBoss !== 'ending' || loop.after !== 'menu' || loop.round !== 2) fails++;
 console.log(log.join('\n'));
 console.log(errors.length ? 'PAGE ERRORS:\n  ' + errors.join('\n  ') : 'no page errors');
 await b.close();

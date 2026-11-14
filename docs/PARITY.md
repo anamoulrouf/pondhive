@@ -35,3 +35,9 @@ Turn 22's sound effects and music called `Math.random()` (14 calls), so in the r
 - Turning sound on or off can no longer change enemy patterns.
 
 The parity runs never unlock audio, so they behave exactly as before.
+
+## 13 chapters and story rounds (Phase 9)
+Parity covers **Chapters 1–5 in round 1**, which play exactly like Turn 22's five arenas.
+- `tools/balance-diff.py` checks that `BALANCE` (apart from the longer pearl table), the first five wave tables, every hit radius, timer and speed, and the 74 gameplay `Math.random` calls all match.
+- The difficulty helpers reduce to the original formulas when `arenaIndex < 5` and `storyRound === 1`.
+- Chapters 6–13 and later rounds are new content, so they are verified by `tools/smoke.mjs`, which plays every chapter, the Chapter 13 rematch and the loop into Round 2.

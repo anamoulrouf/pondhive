@@ -7,8 +7,8 @@ const b = await chromium.launch({ executablePath: exe, args: ['--use-angle=metal
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 await p.goto('file://' + path.resolve('pondhive.html') + '?debug');
 await p.waitForFunction(() => window.__ph);
-console.log(await p.evaluate(() => { const ph = window.__ph; ph.stepMode(true); ph.seed(3); ph.goto('play', 3); ph.step(240, { script: true });
+console.log(await p.evaluate((ch) => { const ph = window.__ph; ph.stepMode(true); ph.seed(3); ph.goto('play', ch); ph.step(240, { script: true });
   const vis = items.filter(it => !(it.mat[13] < -9 || (Math.abs(it.mat[0])+Math.abs(it.mat[5])+Math.abs(it.mat[10])) < 0.01) && it.alpha > 0);
   const by = {}; vis.forEach(it => { const k = (it.dynamic || (it.water ? 'water' : 'static')); by[k] = by[k] || [0,0,0]; by[k][0]++; by[k][1] += it.mesh.count/3; by[k][2] += (it.castShadow===false||it.unlit||it.water||it.transparent)?0:it.mesh.count/3; });
-  return Object.entries(by).sort((a,b)=>b[1][1]-a[1][1]).slice(0,14).map(e=>e[0]+': n='+e[1][0]+' tris='+Math.round(e[1][1])+' shadowTris='+Math.round(e[1][2])).join('\n'); }));
+  return Object.entries(by).sort((a,b)=>b[1][1]-a[1][1]).slice(0,14).map(e=>e[0]+': n='+e[1][0]+' tris='+Math.round(e[1][1])+' shadowTris='+Math.round(e[1][2])).join('\n'); }, +(process.env.CH || 4) - 1));
 await b.close();
